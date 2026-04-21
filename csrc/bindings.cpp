@@ -391,6 +391,31 @@ PYBIND11_MODULE(_core, m) {
         return arr;
     };
 
+    // Helper lambda: zero-copy WRITABLE numpy view.
+    //
+    // Used only for the `values` array, which optimizers need to
+    // update in-place during training (W.values -= lr * dW_values).
+    // All structural arrays (col_indices, row_start, row_nnz,
+    // row_capacity) stay read-only via make_readonly_view — writing
+    // to those would break PaddedCSR invariants.
+    //
+    // Safety boundary:
+    //   - Writable: `values` (just floats, any value is valid)
+    //   - Read-only: everything that defines the sparsity structure
+    //
+    // Topology mutation (growing/pruning live slots) will happen in
+    // milestone 4c through explicit methods that enforce invariants,
+    // never through direct array mutation.
+    auto make_writable_view = [](auto& vec, py::handle parent) {
+        using T = typename std::remove_reference_t<decltype(vec)>::value_type;
+        return py::array_t<T>(
+            {static_cast<py::ssize_t>(vec.size())},
+            {static_cast<py::ssize_t>(sizeof(T))},
+            vec.data(),
+            parent
+        );
+    };
+
     py::class_<sparsecore::PaddedCSR>(m, "PaddedCSR",
         "Sparse matrix with padded-row CSR storage for O(1) insertion. "
         "See docs/design/padded_csr.md for full specification.")
@@ -447,9 +472,12 @@ PYBIND11_MODULE(_core, m) {
         })
 
         // ─── Zero-copy array views ───────────────────────────────────────
-        .def_property_readonly("values", [make_readonly_view](py::object self_obj) {
+        // values[] is WRITABLE — optimizers update it during training via
+        // W.values -= lr * dW_values. The structural arrays below are
+        // read-only because mutating them would break PaddedCSR invariants.
+        .def_property_readonly("values", [make_writable_view](py::object self_obj) {
             auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
-            return make_readonly_view(self.values, self_obj);
+            return make_writable_view(self.values, self_obj);
         })
         .def_property_readonly("col_indices", [make_readonly_view](py::object self_obj) {
             auto& self = self_obj.cast<sparsecore::PaddedCSR&>();

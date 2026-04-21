@@ -299,19 +299,41 @@ def test_cpp_constructor_rejects_out_of_range_column():
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Group 6 — Read-only views
+#  Group 6 — Array view mutability
 # ─────────────────────────────────────────────────────────────────────
 
-def test_views_are_read_only():
-    """Property views (values, col_indices, etc.) cannot be mutated from Python."""
+def test_values_is_writable():
+    """
+    values[] is writable so optimizers can do W.values -= lr * dW_values
+    in place. This is the canonical DST training step. All structural
+    arrays stay read-only (see test_structural_arrays_are_read_only).
+    """
+    p = PaddedCSR.random(10, 10, sparsity=0.5, seed=0)
+    # Capture a live value so we can restore it after the write test
+    original = float(p.values[0])
+    p.values[0] = 999.0  # should NOT raise
+    assert p.values[0] == 999.0
+    # Restore (tests must not leave state leaking across runs)
+    p.values[0] = original
+
+
+def test_structural_arrays_are_read_only():
+    """
+    col_indices, row_start, row_nnz, row_capacity stay read-only because
+    mutating them would break PaddedCSR invariants. Topology mutation
+    (growing/pruning connections) happens through explicit methods in
+    milestone 4c, never via direct array writes.
+    """
     p = PaddedCSR.random(10, 10, sparsity=0.5, seed=0)
 
-    with pytest.raises(ValueError):
-        p.values[0] = 999.0
     with pytest.raises(ValueError):
         p.col_indices[0] = 999
     with pytest.raises(ValueError):
         p.row_start[0] = 999
+    with pytest.raises(ValueError):
+        p.row_nnz[0] = 999
+    with pytest.raises(ValueError):
+        p.row_capacity[0] = 999
 
 
 def test_views_reflect_cpp_memory():
