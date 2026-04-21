@@ -1,0 +1,3 @@
+# Placeholder to preserve this folder in git until the first C++ source lands.
+# csrc/ holds all C++ code for SparseCore — kernels, pybind11 bindings, headers.
+# Naming convention borrowed from pytorch/ao and flash-attention.

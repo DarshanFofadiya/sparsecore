@@ -1,0 +1,48 @@
+# ─── Python ──────────────────────────────────────────────────────────────
+# Bytecode caches and compiled Python; regenerated on every run.
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Installer / editable-install metadata (created by `pip install -e .`)
+*.egg-info/
+*.egg
+.eggs/
+
+# Build artifacts from setup.py / pybind11 extension compilation.
+# (Comments can only be on their own line in .gitignore — patterns must be alone.)
+build/
+dist/
+# Compiled C extension shared libraries (the Python-importable .so on Linux/macOS,
+# .dylib on macOS dynamic libs, .pyd on Windows).
+*.so
+*.dylib
+*.pyd
+
+# ─── C++ build leftovers ─────────────────────────────────────────────────
+# Object files from compilation, static libraries, CMake cache.
+*.o
+*.obj
+*.a
+CMakeCache.txt
+CMakeFiles/
+
+# ─── Testing / coverage ──────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Editors and OS ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+# vim swap files
+*.swp
+# macOS folder metadata (apologies in advance to Linux users)
+.DS_Store
+
+# ─── Environments ────────────────────────────────────────────────────────
+# We distribute environment.yml; nobody should commit their personal env.
+.venv/
+venv/
+env/

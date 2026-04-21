@@ -1,0 +1,3 @@
+# Placeholder to preserve this folder in git.
+# tests/ holds pytest Oracle tests — every C++ math kernel is verified here
+# against a dense PyTorch reference to 1e-5 tolerance.

@@ -1,0 +1,38 @@
+# SparseCore build and metadata specification.
+
+[build-system]
+requires = ["setuptools>=68", "wheel", "pybind11>=2.11"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sparsecore"
+version = "0.0.1"
+description = "Dynamic sparse training for PyTorch, CPU-native, Apple Silicon first."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "SparseCore Contributors" }]
+keywords = ["pytorch", "sparsity", "dynamic-sparse-training", "neon", "apple-silicon"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.8",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pybind11>=2.11"]
+
+[project.urls]
+Homepage = "https://github.com/sparsecore/sparsecore"
+Documentation = "https://github.com/sparsecore/sparsecore/tree/main/docs"
+
+[tool.setuptools.packages.find]
+include = ["sparsecore*"]
+exclude = ["tests*", "examples*", "csrc*", "docs*"]

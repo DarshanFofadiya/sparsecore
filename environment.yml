@@ -1,0 +1,34 @@
+# SparseCore development environment
+#
+# This is the canonical environment spec for SparseCore. It is the only
+# supported way to set up a development environment.
+#
+# To (re)create:
+#     conda env remove -n sparsecore -y       # if it already exists
+#     conda env create -f environment.yml
+#     conda activate sparsecore
+#
+# Design choices (see docs/SYSTEM_PROMPT.md section 2a for rationale):
+#
+#   - Python 3.11: PyTorch's most stable Apple Silicon target as of 2025.
+#   - PyTorch via pip, not conda: the official pytorch.org wheels on PyPI are
+#     the canonical Apple Silicon builds. conda-forge's torch is less
+#     maintained for MPS/NEON.
+#   - `torch>=2.8`: minimum version that ships the Stable libtorch ABI,
+#     which keeps our C++ extension binary-compatible across future releases.
+#     No upper bound is pinned — we want to follow PyTorch forward, not freeze.
+
+name: sparsecore
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - torch>=2.8
+      - numpy>=1.24
+      - pybind11>=2.11
+      - pytest>=7.0
