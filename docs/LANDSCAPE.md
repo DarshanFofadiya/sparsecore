@@ -43,9 +43,13 @@ SparseCore lives in the bottom-right cell — **unstructured, training-from-scra
 - **What we learn from it:** Minimal user code footprint is the right ergonomic target. We should match or beat it.
 
 ### Cerebras — cerebras.pytorch.sparse
-- **What it does:** Cerebras's PyTorch sparse training API, used on their wafer-scale hardware.
-- **Why it's not us:** Hardware-specific (CS-2/CS-3), not community-accessible.
-- **What we learn from it:** Their `SparsityAlgorithm` pluggable class hierarchy and per-parameter sparsity schedules are a mature industrial design worth mining.
+- **Docs:** [Cerebras Sparsity](https://training-api.cerebras.ai/en/latest/wsc/tutorials/sparsity.html)
+- **What it does:** Cerebras's PyTorch sparse training API for their wafer-scale CS-2/CS-3 hardware. Ships the same algorithm catalog we plan — Static, GMP, SET, RigL — with a clean `SparsityAlgorithm` base class and composable per-parameter schedules. The most mature sparse-training API in the industry today.
+- **Why it's not us (the subtle but important difference):** Cerebras stores weights *densely* and applies a binary mask before forward and after backward (from their docs: "mask tensor is multiplied inplace to the original dense parameter before forward and to the gradients after backward"). This is the correct choice for their wafer-scale chip, which schedules dense matmuls in SRAM extremely fast. **But it means their "sparsity" is simulated** — every forward pass still does the full dense matmul, every backward still allocates the full dense gradient. Memory and FLOPs are dense even when the math is zero.
+- **Why that matters for us:** On CPU hardware, the dense+mask approach is actively wrong. A 7B-parameter dense model needs ~14GB just to hold weights at float16 — impossible on a 32GB MacBook. At 90% sparsity with *true* sparse storage (what we build), that's ~1.4GB. The same approach that works for Cerebras on their own chip would make the library unusable on commodity hardware.
+- **What we adopt (with credit):** Their API is the industrial-quality reference. We will borrow the `SparsityAlgorithm` base class shape, their algorithm catalog, their per-parameter composability, and their schedule abstraction — see `borrow-dont-reinvent.md`. The credit will be explicit in docstrings.
+- **What we diverge on:** The storage substrate. Cerebras: dense tensor + binary mask (right for WSE). SparseCore: Padded-CSR genuinely sparse (right for CPU/MacBook).
+- **Positioning:** Cerebras and SparseCore are complementary, not competitive. A researcher prototypes a new DST algorithm on SparseCore on their laptop; when they're ready for a production run at 100B+ parameters, they deploy to Cerebras. We are the sandbox; they are the scale system.
 
 ### HuggingFace — pytorch_block_sparse
 - **Repo:** [huggingface/pytorch_block_sparse](https://github.com/huggingface/pytorch_block_sparse)
@@ -108,6 +112,23 @@ Reading the landscape honestly:
 2. **Native Apple Silicon NEON kernels** — Nobody else has sparse training kernels for Apple Silicon. Researchers prototype on MacBooks; we make that fast.
 3. **Pluggable Router API** — RigL, SET, Sparse Momentum, and future papers express as ~100-line Python classes. No C++ contributions required from users.
 4. **True sparse (not mask-simulated)** — We don't compute dense gradients and mask them. We compute only what's needed. This is the actual FLOP saving everyone else promises.
+
+## SparseCore vs Cerebras — The One Table
+
+The most useful comparison for readers already familiar with Cerebras:
+
+| Dimension                      | Cerebras `cstorch.sparse`         | SparseCore                      |
+| ------------------------------ | --------------------------------- | ------------------------------- |
+| Algorithm catalog              | Static, GMP, SET, RigL            | Static, SET, RigL (v0.1)        |
+| API design quality             | Production-hardened, composable   | We adopt theirs                 |
+| Storage substrate              | Dense tensor + binary mask        | Padded-CSR (genuinely sparse)   |
+| FLOPs at 90% sparsity          | 100% (mask after dense matmul)    | ~10% (only live connections)    |
+| Memory at 90% sparsity         | 100% (dense weight tensor)        | ~10% (sparse storage)           |
+| Target hardware                | Cerebras CS-2/CS-3 wafer          | Apple Silicon, ARM, x86         |
+| Installable on a MacBook       | No                                | `pip install sparsecore`        |
+| Primary audience               | Customers with Cerebras contracts | Open-source research community  |
+
+**The mental model:** Cerebras is the right choice if you have a wafer and need to productionize a trained model. SparseCore is the right choice if you're a researcher iterating on a new DST algorithm on your laptop.
 
 ## Why a Researcher in 2026 Chooses SparseCore
 
