@@ -27,7 +27,12 @@ from sparsecore._core import PaddedCSR as _PaddedCSR
 #  spmm — sparse-dense matrix multiply
 # ─────────────────────────────────────────────────────────────────────
 
-def spmm(W: _PaddedCSR, X: torch.Tensor) -> torch.Tensor:
+def spmm(
+    W: _PaddedCSR,
+    X: torch.Tensor,
+    *,
+    kernel: str = "auto",
+) -> torch.Tensor:
     """
     Compute Y = W @ X, where W is a PaddedCSR and X is a dense 2-D tensor.
 
@@ -36,37 +41,37 @@ def spmm(W: _PaddedCSR, X: torch.Tensor) -> torch.Tensor:
     stored sparse) and X is the input activation (shape (in_features,
     batch_size * seq_len), stored dense).
 
-    For v0.1 this dispatches to the scalar reference kernel. Milestone 3d
-    will add a NEON SIMD fast path and dispatch based on shape/alignment;
-    the public API does not change.
+    Dispatch:
+        - kernel="auto" (default): use NEON SIMD on ARM64 builds, falls
+          back to scalar elsewhere. For this v0.1, "auto" always means
+          NEON because the build targets Apple Silicon.
+        - kernel="simd": force the NEON SIMD kernel. Errors on non-ARM.
+        - kernel="scalar": force the scalar reference kernel (slower but
+          bit-stable). Useful for debugging and benchmark baselines.
 
     Args:
         W: a PaddedCSR of shape (M, K). Inner dimension K must equal X's
            first dimension.
         X: a 2-D dense tensor of shape (K, N). Any float dtype is accepted;
            it will be converted to float32 for the computation. Must be on
-           CPU — GPU tensors raise an error. Strided layout only (no
-           sparse inputs).
+           CPU — GPU tensors raise an error.
+        kernel: which kernel to dispatch to. See above.
 
     Returns:
         A 2-D dense torch.Tensor Y of shape (M, N), dtype float32, on CPU.
-        Contains the product W @ X computed in scalar float32 arithmetic.
 
     Raises:
         TypeError: if W is not a PaddedCSR or X is not a torch.Tensor.
-        ValueError: if X is not 2-D, or shape mismatch between W and X.
+        ValueError: if X is not 2-D, or shape mismatch, or unknown kernel.
         RuntimeError: if X is on a non-CPU device.
 
     Notes:
-        - O(nnz(W) * N) scalar multiply-adds. For an (M, K) W at sparsity s
-          with typical Transformer shapes (N = batch*seq_len), this is
-          (1-s) * M * K * N FMAs — up to 10x fewer than dense at 90% sparsity.
-        - This function has no autograd support yet; call only from
-          inference / no_grad contexts. Autograd arrives in Milestone 4a.
+        - O(nnz(W) * N) multiply-adds, regardless of kernel. NEON cuts the
+          wall-clock constant by ~3-4x on the inner loop.
+        - Autograd support arrives in Milestone 4a; for now, call from
+          inference / no_grad contexts only.
     """
     # ─── Type checks ──────────────────────────────────────────────────
-    # The C++ binding would catch wrong types too, but a Python-level
-    # check gives a clearer error message than a pybind11 type-cast failure.
     if not isinstance(W, _PaddedCSR):
         raise TypeError(
             f"spmm: W must be a sparsecore.PaddedCSR, got {type(W).__name__}"
@@ -77,8 +82,6 @@ def spmm(W: _PaddedCSR, X: torch.Tensor) -> torch.Tensor:
         )
 
     # ─── Device check ─────────────────────────────────────────────────
-    # v0.1 is CPU-only. A crisp error beats a mysterious segfault if the
-    # user absentmindedly passes a .cuda() or .mps() tensor.
     if X.device.type != "cpu":
         raise RuntimeError(
             f"spmm: X must be on CPU (got device={X.device}). "
@@ -86,27 +89,29 @@ def spmm(W: _PaddedCSR, X: torch.Tensor) -> torch.Tensor:
         )
 
     # ─── Shape check ──────────────────────────────────────────────────
-    # The C++ binding re-checks this, but failing here lets us report
-    # the PyTorch-native shape syntax (X.shape) in the error.
     if X.dim() != 2:
         raise ValueError(
             f"spmm: X must be 2-D, got shape={tuple(X.shape)}"
         )
 
     # ─── Dtype + contiguity coercion ──────────────────────────────────
-    # Convert to float32 and ensure C-contiguous layout. For float32
-    # contiguous inputs these are both no-ops (PyTorch returns self).
     X_f32 = X.to(dtype=torch.float32).contiguous()
 
-    # ─── Dispatch to the scalar kernel ────────────────────────────────
-    # .numpy() gives a zero-copy view into the torch tensor's storage
-    # (safe because we forced contiguous float32 above). The C++ side
-    # reads through this view and writes into a freshly-allocated
-    # output buffer, so there is no aliasing risk.
-    Y_np = _core.spmm_scalar(W, X_f32.numpy())
+    # ─── Kernel dispatch ──────────────────────────────────────────────
+    # The map is explicit so adding future backends (e.g., avx2, rvv) is
+    # a one-line change. "auto" is currently a synonym for "simd" on our
+    # Apple Silicon build; a future runtime-dispatch layer will pick
+    # based on CPU features detected at .so-load time.
+    kernel_fns = {
+        "auto": _core.spmm_simd,
+        "simd": _core.spmm_simd,
+        "scalar": _core.spmm_scalar,
+    }
+    if kernel not in kernel_fns:
+        raise ValueError(
+            f"spmm: unknown kernel={kernel!r}. "
+            f"Expected one of: {sorted(kernel_fns.keys())}."
+        )
 
-    # ─── Wrap result back as a torch.Tensor ───────────────────────────
-    # torch.from_numpy shares memory with the NumPy array — this is a
-    # zero-copy hand-off. The lifetime of Y_np is tied to the returned
-    # tensor via NumPy's refcount, so we don't need to copy.
+    Y_np = kernel_fns[kernel](W, X_f32.numpy())
     return torch.from_numpy(Y_np)

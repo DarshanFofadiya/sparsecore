@@ -25,6 +25,7 @@
 #include "kernels/vector_dot_neon.hpp"
 #include "kernels/padded_csr.hpp"
 #include "kernels/spmm.hpp"
+#include "kernels/spmm_neon.hpp"
 
 namespace py = pybind11;
 
@@ -136,11 +137,15 @@ float py_vector_dot_simd(
 
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Python wrapper: spmm_scalar
+//  Python wrapper: spmm_scalar / spmm_simd
+//
+//  Both scalar and NEON SpMM have identical input/output shapes, so we
+//  factor validation + output-allocation into a shared helper and have
+//  two thin wrappers that just pick which kernel to call.
 //
 //  Compute Y = W @ X where W is a PaddedCSR and X is a dense float32 tensor.
-//  Allocates a fresh NumPy array for Y (zero-initialized by NumPy's default
-//  allocator — matching the kernel's "Y must be pre-zeroed" contract).
+//  Allocates a fresh NumPy array for Y. The kernel self-zeros it internally,
+//  so we don't need to pre-zero on the Python side.
 //
 //  Validation:
 //    - X must be 2-D. A 1-D X is ambiguous (column vector? row vector?);
@@ -153,16 +158,27 @@ float py_vector_dot_simd(
 //  Returns a new NumPy array of shape (W.nrows, X.shape[1]), dtype float32.
 //  The caller can wrap it in a torch.Tensor via torch.from_numpy(...).
 // ─────────────────────────────────────────────────────────────────────────
-py::array_t<float> py_spmm_scalar(
+namespace {
+
+// Shared setup: validates inputs and allocates Y. Returns the three raw
+// pointers / shapes the kernel needs; the caller picks the kernel.
+struct SpmmPlan {
+    py::array_t<float> Y;
+    const float* x_ptr;
+    float* y_ptr;
+    int64_t K;
+    int64_t N;
+};
+
+SpmmPlan prepare_spmm(
     const sparsecore::PaddedCSR& W,
-    py::array_t<float, py::array::c_style | py::array::forcecast> X
+    const py::array_t<float, py::array::c_style | py::array::forcecast>& X,
+    const char* kernel_name
 ) {
     py::buffer_info x_info = X.request();
-
-    // Shape validation: 2-D input required.
     if (x_info.ndim != 2) {
         throw std::invalid_argument(
-            "spmm_scalar: X must be 2-D, got ndim=" +
+            std::string(kernel_name) + ": X must be 2-D, got ndim=" +
             std::to_string(x_info.ndim) + "."
         );
     }
@@ -170,29 +186,48 @@ py::array_t<float> py_spmm_scalar(
     const int64_t K = x_info.shape[0];
     const int64_t N = x_info.shape[1];
 
-    // Inner-dimension match: W's column count must equal X's row count.
     if (W.ncols != K) {
         throw std::invalid_argument(
-            "spmm_scalar: shape mismatch. W has ncols=" +
+            std::string(kernel_name) + ": shape mismatch. W has ncols=" +
             std::to_string(W.ncols) +
             " but X has shape[0]=" + std::to_string(K) +
             ". Inner dimensions must match for matmul."
         );
     }
 
-    // Allocate the output array. py::array_t's shape constructor calls
-    // numpy.zeros-equivalent underneath — memory is zero-initialized, which
-    // is exactly what spmm_scalar's "pre-zeroed Y" contract requires.
     const int64_t M = W.nrows;
     auto Y = py::array_t<float>({M, N});
     py::buffer_info y_info = Y.request();
 
-    const float* x_ptr = static_cast<const float*>(x_info.ptr);
-    float* y_ptr = static_cast<float*>(y_info.ptr);
+    SpmmPlan plan;
+    plan.Y = Y;
+    plan.x_ptr = static_cast<const float*>(x_info.ptr);
+    plan.y_ptr = static_cast<float*>(y_info.ptr);
+    plan.K = K;
+    plan.N = N;
+    return plan;
+}
 
-    sparsecore::spmm_scalar(W, x_ptr, K, N, y_ptr);
+}  // anonymous namespace
 
-    return Y;
+
+py::array_t<float> py_spmm_scalar(
+    const sparsecore::PaddedCSR& W,
+    py::array_t<float, py::array::c_style | py::array::forcecast> X
+) {
+    auto plan = prepare_spmm(W, X, "spmm_scalar");
+    sparsecore::spmm_scalar(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+    return plan.Y;
+}
+
+
+py::array_t<float> py_spmm_simd(
+    const sparsecore::PaddedCSR& W,
+    py::array_t<float, py::array::c_style | py::array::forcecast> X
+) {
+    auto plan = prepare_spmm(W, X, "spmm_simd");
+    sparsecore::spmm_simd_neon(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+    return plan.Y;
 }
 
 
@@ -221,7 +256,12 @@ PYBIND11_MODULE(_core, m) {
           "Scalar sparse-dense matmul Y = W @ X. "
           "W is a PaddedCSR (M, K), X is a dense float32 array (K, N). "
           "Returns a new (M, N) float32 NumPy array. "
-          "Reference implementation — no SIMD. See also: spmm_simd_neon (3d).");
+          "Reference implementation — no SIMD. See also: spmm_simd (NEON).");
+
+    m.def("spmm_simd", &py_spmm_simd,
+          "NEON SIMD sparse-dense matmul Y = W @ X. Same contract as "
+          "spmm_scalar; the inner loop is vectorized 4-wide with NEON "
+          "FMA. Numerically agrees with spmm_scalar within rtol=atol=1e-5.");
 
     // ═════════════════════════════════════════════════════════════════════
     //  PaddedCSR — sparse matrix storage with padded rows for O(1) insert.

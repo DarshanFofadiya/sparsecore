@@ -71,6 +71,7 @@ ext_modules = [
             "csrc/kernels/vector_dot_neon.cpp",
             "csrc/kernels/padded_csr.cpp",
             "csrc/kernels/spmm.cpp",
+            "csrc/kernels/spmm_neon.cpp",
         ],
         # Include paths used for `#include "kernels/foo.hpp"` etc.
         include_dirs=["csrc"],
