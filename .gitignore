@@ -46,3 +46,8 @@ htmlcov/
 .venv/
 venv/
 env/
+
+# ─── Datasets ────────────────────────────────────────────────────────────
+# Demos auto-download MNIST (and future datasets) on first run. Never
+# commit the actual bytes — they're regenerated on demand.
+data/

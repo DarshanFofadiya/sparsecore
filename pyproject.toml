@@ -28,6 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pybind11>=2.11"]
+demos = ["matplotlib>=3.7", "torchvision>=0.15"]
 
 [project.urls]
 Homepage = "https://github.com/sparsecore/sparsecore"
