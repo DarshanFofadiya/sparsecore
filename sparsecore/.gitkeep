@@ -1,3 +1,0 @@
-# Placeholder to preserve this folder in git.
-# sparsecore/ is the Python package. The folder name IS the import name —
-# users will write `import sparsecore` or `from sparsecore import SparseLinear`.

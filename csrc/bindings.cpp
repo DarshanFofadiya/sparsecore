@@ -18,10 +18,12 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>  // enables auto-conversion Python list <-> std::vector
 
 #include "kernels/double_tensor.hpp"
 #include "kernels/vector_dot.hpp"
 #include "kernels/vector_dot_neon.hpp"
+#include "kernels/padded_csr.hpp"
 
 namespace py = pybind11;
 
@@ -152,4 +154,129 @@ PYBIND11_MODULE(_core, m) {
           "NEON SIMD version of vector_dot. Same contract, ~3-4x faster "
           "on Apple Silicon. Numerically agrees with vector_dot within "
           "rtol=atol=1e-5.");
+
+    // ═════════════════════════════════════════════════════════════════════
+    //  PaddedCSR — sparse matrix storage with padded rows for O(1) insert.
+    //  See docs/design/padded_csr.md for the full specification.
+    // ═════════════════════════════════════════════════════════════════════
+    //
+    //  Exposes the C++ sparsecore::PaddedCSR struct as a Python class.
+    //  The `values`, `col_indices`, `row_start`, `row_nnz`, `row_capacity`
+    //  properties return zero-copy NumPy views over the C++ vectors.
+    //  Python code must treat them as read-only (enforced by numpy's
+    //  writable=False flag below).
+    //
+    //  The Python-facing user API (from_dense, from_torch_sparse_csr,
+    //  random) is defined in sparsecore/layout.py — that module constructs
+    //  the underlying C++ object by calling this class's full constructor.
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Helper lambda: build a zero-copy read-only numpy view over a vector.
+    // Captures the PaddedCSR-owning lifetime via the `parent` handle so
+    // the underlying memory stays alive as long as the array does.
+    auto make_readonly_view = [](auto& vec, py::handle parent) {
+        using T = typename std::remove_reference_t<decltype(vec)>::value_type;
+        auto arr = py::array_t<T>(
+            {static_cast<py::ssize_t>(vec.size())},  // shape
+            {static_cast<py::ssize_t>(sizeof(T))},   // strides
+            vec.data(),                              // data pointer
+            parent                                   // keeps owner alive
+        );
+        // Mark non-writable so Python users can't mutate C++ state behind
+        // its back. Mutation goes through explicit methods in Phase 4.
+        py::detail::array_proxy(arr.ptr())->flags &= ~py::detail::npy_api::NPY_ARRAY_WRITEABLE_;
+        return arr;
+    };
+
+    py::class_<sparsecore::PaddedCSR>(m, "PaddedCSR",
+        "Sparse matrix with padded-row CSR storage for O(1) insertion. "
+        "See docs/design/padded_csr.md for full specification.")
+
+        // ─── Constructors ────────────────────────────────────────────────
+        .def(py::init<int64_t, int64_t>(),
+             py::arg("nrows"), py::arg("ncols"),
+             "Create an empty (zero-capacity) PaddedCSR of the given shape.")
+
+        .def(py::init([](int64_t nrows, int64_t ncols,
+                         std::vector<float> values,
+                         std::vector<int32_t> col_indices,
+                         std::vector<int32_t> row_start,
+                         std::vector<int32_t> row_nnz,
+                         std::vector<int32_t> row_capacity) {
+                auto p = std::make_unique<sparsecore::PaddedCSR>(
+                    nrows, ncols,
+                    std::move(values), std::move(col_indices),
+                    std::move(row_start), std::move(row_nnz),
+                    std::move(row_capacity)
+                );
+                sparsecore::assert_invariants(*p);  // validate on construction
+                return p;
+             }),
+             py::arg("nrows"), py::arg("ncols"),
+             py::arg("values"), py::arg("col_indices"),
+             py::arg("row_start"), py::arg("row_nnz"), py::arg("row_capacity"),
+             "Full constructor. Validates all 8 invariants from design "
+             "doc §2.2; raises ValueError on any violation.")
+
+        // ─── Shape ───────────────────────────────────────────────────────
+        .def_property_readonly("shape", [](const sparsecore::PaddedCSR& self) {
+            return py::make_tuple(self.nrows, self.ncols);
+        })
+        .def_property_readonly("nrows", [](const sparsecore::PaddedCSR& self) {
+            return self.nrows;
+        })
+        .def_property_readonly("ncols", [](const sparsecore::PaddedCSR& self) {
+            return self.ncols;
+        })
+
+        // ─── Aggregate accessors ─────────────────────────────────────────
+        .def_property_readonly("nnz", &sparsecore::PaddedCSR::nnz,
+            "Total live non-zero entries (sum of row_nnz).")
+        .def_property_readonly("total_capacity", &sparsecore::PaddedCSR::total_capacity,
+            "Total allocated slots including padding (sum of row_capacity).")
+        .def_property_readonly("padding_slots", &sparsecore::PaddedCSR::padding_slots,
+            "Number of slots allocated but not yet used (total_capacity - nnz).")
+        .def_property_readonly("sparsity", [](const sparsecore::PaddedCSR& self) {
+            // Fraction of logical cells that are zero = 1 - nnz / (nrows*ncols).
+            if (self.nrows == 0 || self.ncols == 0) return 1.0;
+            return 1.0 - static_cast<double>(self.nnz()) /
+                         static_cast<double>(self.nrows * self.ncols);
+        })
+
+        // ─── Zero-copy array views ───────────────────────────────────────
+        .def_property_readonly("values", [make_readonly_view](py::object self_obj) {
+            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            return make_readonly_view(self.values, self_obj);
+        })
+        .def_property_readonly("col_indices", [make_readonly_view](py::object self_obj) {
+            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            return make_readonly_view(self.col_indices, self_obj);
+        })
+        .def_property_readonly("row_start", [make_readonly_view](py::object self_obj) {
+            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            return make_readonly_view(self.row_start, self_obj);
+        })
+        .def_property_readonly("row_nnz", [make_readonly_view](py::object self_obj) {
+            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            return make_readonly_view(self.row_nnz, self_obj);
+        })
+        .def_property_readonly("row_capacity", [make_readonly_view](py::object self_obj) {
+            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            return make_readonly_view(self.row_capacity, self_obj);
+        })
+
+        // ─── Invariants ──────────────────────────────────────────────────
+        .def("assert_invariants", &sparsecore::assert_invariants,
+             "Verify all 8 invariants from design doc §2.2; raise ValueError "
+             "with a descriptive message on any violation.")
+
+        // ─── Repr ────────────────────────────────────────────────────────
+        .def("__repr__", [](const sparsecore::PaddedCSR& self) {
+            return "PaddedCSR(nrows=" + std::to_string(self.nrows) +
+                   ", ncols=" + std::to_string(self.ncols) +
+                   ", nnz=" + std::to_string(self.nnz()) +
+                   ", capacity=" + std::to_string(self.total_capacity()) +
+                   ")";
+        })
+    ;
 }

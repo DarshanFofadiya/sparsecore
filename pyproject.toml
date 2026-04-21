@@ -36,3 +36,16 @@ Documentation = "https://github.com/sparsecore/sparsecore/tree/main/docs"
 [tool.setuptools.packages.find]
 include = ["sparsecore*"]
 exclude = ["tests*", "examples*", "csrc*", "docs*"]
+
+[tool.pytest.ini_options]
+# Use importlib import mode — the modern recommendation. Without this,
+# pytest's legacy "prepend" mode adds the workspace root to sys.path[0],
+# which makes Python discover the workspace's `sparsecore/` folder as a
+# namespace package BEFORE the installed editable package is resolved.
+# The namespace-package view of sparsecore has no __init__.py executed,
+# so `from sparsecore import PaddedCSR` fails with "unknown location".
+# importlib mode keeps the installed package as the canonical source.
+# See: https://docs.pytest.org/en/stable/explanation/pythonpath.html
+addopts = "--import-mode=importlib"
+testpaths = ["tests"]
+pythonpath = []  # explicitly do NOT add the workspace root
