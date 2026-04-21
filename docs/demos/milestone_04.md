@@ -56,12 +56,55 @@ a single padding slot, because their gradient was always exactly zero.
 This is the whole thesis of the project compressed into one line of
 output. Dense-simulated libraries cannot make this claim.
 
-**The sparse-on-CPU speed story.** 33.2ms vs 1337.7ms for 200 steps is
-a 40× wall-clock win over a dense `nn.Linear`. Some of that is
-`nn.Linear`'s Python overhead, but the structural advantage is real: we
-do 10× fewer FMAs per forward+backward, and we do them through a
-zero-allocation kernel that skips both padding slots and Python's
-tensor-creation overhead.
+**The sparse-on-CPU speed story — with an important correction.**
+Demo 4 initially reported "33.2ms vs 1337.7ms, 40× faster than dense."
+That number was misleading, and I've left the correction here rather
+than hide it.
+
+What actually happened: demo 4 compared our raw kernel path against
+`nn.Linear` running through the full PyTorch framework (module call +
+`optimizer.zero_grad()` + `optimizer.step()`) on a shape so tiny
+(32×64) that Python overhead dominated the dense path. That was a
+framework-overhead comparison, not a matmul comparison.
+
+The honest numbers, measured head-to-head in
+`examples/demo_04b_honest_benchmark.py` (both paths with raw tensors,
+no `nn.Module` wrapping, shape 512×256×64):
+
+| Sparsity | Dense ms/step | Sparse ms/step | Speedup |
+|----------|---------------|-----------------|----------|
+| 0%       | 0.20          | 24.22           | 0.01x    |
+| 50%      | 0.27          | 11.40           | 0.02x    |
+| 70%      | 0.23          | 6.52            | 0.04x    |
+| 80%      | 0.21          | 4.64            | 0.04x    |
+| 90%      | 0.20          | 2.35            | 0.09x    |
+| 95%      | 0.19          | 1.52            | 0.12x    |
+| 99%      | 0.22          | 0.68            | 0.33x    |
+
+**We are slower than dense at every sparsity on Apple Silicon** for
+this shape in the training loop. Apple's AMX matrix coprocessor
+processes the dense matmul at ~40 GFLOP/s without regard to sparsity;
+no general-purpose NEON loop can match that throughput, even at 99%.
+
+What this means for positioning:
+
+- **Apple Silicon is our HARDEST platform for the speed story.** AMX
+  is an Apple-only advantage. On Graviton/Ampere/Intel (untested by
+  us, but published SpMM benchmarks beat MKL starting around 75%
+  sparsity), the crossover should land much earlier.
+- **Where we genuinely win even on Apple Silicon today:**
+  - **Memory footprint** — a 90%-sparse model uses ~10% of dense
+    memory. This is what lets us train models that don't fit on a
+    MacBook at all in dense form.
+  - **Correctness invariant** — padding slots stay at exactly 0.0
+    after training, which dense-simulated libraries cannot claim.
+  - **Researcher ergonomics** — the Pluggable Router design
+    (milestones 4c-e) is the real product. "Speed" is a
+    "fast enough to be usable" claim, not "faster than dense."
+
+The version of SparseCore that can make a legitimate "faster than
+dense" claim for forward + backward is the one that runs on non-Apple
+hardware. That's an important test to add soon.
 
 **Training actually works end-to-end.** The sparse loss drops by 28%.
 Not as much as the dense baseline (which drops by 98%), because a 10%-
