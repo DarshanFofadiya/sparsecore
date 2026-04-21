@@ -276,3 +276,145 @@ def to_dense(p: "_PaddedCSR") -> torch.Tensor:
         dense[i, row_cols] = torch.from_numpy(np.ascontiguousarray(row_vals))
 
     return dense
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Transpose: build Wᵀ from W
+#
+#  This is the classical CSR-transpose in two passes (count + scatter).
+#  See docs/design/spmm_backward.md §3.2 for the full algorithm.
+#
+#  Cost: O(nnz + M + K) time, one new PaddedCSR allocation. We use this
+#  once per backward pass to turn W into Wᵀ so dL/dX = Wᵀ @ dL/dY can
+#  reuse our existing SpMM kernel. Transpose is not in the SpMM hot
+#  path — we can afford the O(nnz) walk.
+# ─────────────────────────────────────────────────────────────────────
+
+def transpose(p: "_PaddedCSR", *, padding_ratio: float = 0.2) -> "_PaddedCSR":
+    """
+    Return a new PaddedCSR that is the transpose of `p`.
+
+    Transposition swaps rows and columns: if W has a live entry at (i, c)
+    with value v, then Wᵀ has a live entry at (c, i) with the same value.
+
+    Args:
+        p: the PaddedCSR to transpose. Not mutated.
+        padding_ratio: padding ratio for the output. Defaults to 0.2;
+            for backward pass usage we could pick 0.0 (no padding, since
+            we never insert into Wᵀ), but 0.2 matches our other factories
+            and keeps options open.
+
+    Returns:
+        A new PaddedCSR of shape (p.ncols, p.nrows) with the same nnz.
+        Its live entries within each row are contiguous (not sorted by
+        original row index — see note below).
+
+    Notes:
+        - Live entries in each output row are NOT sorted by column. They
+          appear in the order they were discovered during pass 2, which
+          is the row-major order of p. This doesn't matter for SpMM
+          correctness (the kernel walks live slots; order is irrelevant)
+          but a future optimization could sort for cache locality.
+    """
+    M = p.nrows          # rows of input
+    K = p.ncols          # cols of input → rows of output
+    nnz = p.nnz
+
+    # ─── Extract the live entries from p as flat arrays ───────────────
+    # We only read the live portion of each row (indices
+    # [row_start[i] : row_start[i] + row_nnz[i]]), skipping padding.
+    # Result: three same-length arrays describing every live entry.
+    values_view = p.values          # zero-copy NumPy view over C++ values
+    col_view = p.col_indices        # zero-copy NumPy view over col_indices
+    row_start = p.row_start         # length M
+    row_nnz = p.row_nnz             # length M
+
+    # Build an "entry stream": for each live entry, record (row, col, val).
+    # This flattens the per-row slicing into one big triple of arrays.
+    src_rows = np.empty(nnz, dtype=np.int32)
+    src_cols = np.empty(nnz, dtype=np.int32)
+    src_vals = np.empty(nnz, dtype=np.float32)
+    offset = 0
+    for i in range(M):
+        n_live = int(row_nnz[i])
+        if n_live == 0:
+            continue
+        start = int(row_start[i])
+        src_rows[offset : offset + n_live] = i
+        src_cols[offset : offset + n_live] = col_view[start : start + n_live]
+        src_vals[offset : offset + n_live] = values_view[start : start + n_live]
+        offset += n_live
+    # Sanity: we should have exactly consumed nnz entries.
+    assert offset == nnz, (
+        f"transpose: entry-stream build consumed {offset} entries, "
+        f"expected {nnz}. PaddedCSR invariants may be broken."
+    )
+
+    # ─── Pass 1: count per-output-row nnz ─────────────────────────────
+    # In Wᵀ, row index is the original column index. So we count how
+    # many live entries had each column value in the input.
+    # np.bincount is the idiomatic "count-by-index" primitive.
+    out_row_nnz = np.bincount(src_cols, minlength=K).astype(np.int32)
+    # Length check: bincount returns length max(src_cols)+1 when no
+    # minlength specified; with minlength=K we're guaranteed length K.
+
+    # ─── Allocate output capacities and compute row_start ─────────────
+    out_row_capacity = _compute_row_capacity(out_row_nnz, padding_ratio)
+    # row_start[k] = sum of capacities for rows 0..k-1.
+    # Shape: length K. Use cumulative sum with a 0 prepended.
+    out_row_start = np.concatenate(
+        ([0], np.cumsum(out_row_capacity[:-1]))
+    ).astype(np.int32)
+
+    # Allocate the slot arrays, initialized to the padding sentinel:
+    # values=0.0, col_indices=-1. We'll overwrite live slots below.
+    total_capacity = int(out_row_capacity.sum())
+    out_values = np.zeros(total_capacity, dtype=np.float32)
+    out_cols = np.full(total_capacity, -1, dtype=np.int32)
+
+    # ─── Pass 2: scatter entries into output ──────────────────────────
+    # write_cursor[k] = next free slot within output row k.
+    # Starts at row_start[k] (the beginning of row k's region) and
+    # increments by 1 for each entry placed in that row.
+    write_cursor = out_row_start.copy()
+
+    # Walk the entry stream. For each (src_row, src_col, val),
+    # place it at (out_row=src_col, out_col=src_row) in Wᵀ.
+    #
+    # Vectorized version using fancy indexing — much faster than a
+    # Python-level for loop for large nnz. We compute the destination
+    # slot for each entry in one numpy operation.
+    if nnz > 0:
+        # For each entry e, dest_row_e = src_cols[e]. The slot inside
+        # that row is the current cursor value, which we then advance.
+        # To vectorize with incrementing cursor, we compute per-entry
+        # "position within its output row" via a grouped-rank trick:
+        #   - sort entries by their output row
+        #   - within each group, position = 0, 1, 2, ...
+        sort_order = np.argsort(src_cols, kind="stable")
+        sorted_rows = src_cols[sort_order]         # ascending
+        # within-group ranks: for each group of equal values, the rank
+        # within that group is its index minus the first-occurrence index
+        first_occurrence = np.searchsorted(sorted_rows, sorted_rows)
+        within_group_rank = np.arange(nnz, dtype=np.int32) - first_occurrence
+        # dest slot = row_start[dest_row] + within_group_rank
+        dest_slots = out_row_start[sorted_rows] + within_group_rank
+        # Scatter
+        out_values[dest_slots] = src_vals[sort_order]
+        out_cols[dest_slots] = src_rows[sort_order]
+        # Advance cursors (not strictly needed after vectorized scatter,
+        # but kept for clarity / future extension):
+        write_cursor = out_row_start + out_row_nnz
+
+    # ─── Hand off to the C++ constructor ──────────────────────────────
+    # This will run the invariant checker; any bug in our transpose
+    # algorithm shows up immediately as a ValueError.
+    return _core.PaddedCSR(
+        nrows=int(K),   # swapped
+        ncols=int(M),   # swapped
+        values=out_values.tolist(),
+        col_indices=out_cols.tolist(),
+        row_start=out_row_start.tolist(),
+        row_nnz=out_row_nnz.tolist(),
+        row_capacity=out_row_capacity.tolist(),
+    )

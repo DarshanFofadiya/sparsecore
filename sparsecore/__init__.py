@@ -36,6 +36,7 @@ _PaddedCSRCpp.from_dense = staticmethod(_layout.from_dense)
 _PaddedCSRCpp.from_torch_sparse_csr = staticmethod(_layout.from_torch_sparse_csr)
 _PaddedCSRCpp.random = staticmethod(_layout.random)
 _PaddedCSRCpp.to_dense = _layout.to_dense
+_PaddedCSRCpp.transpose = _layout.transpose
 
 
 # Public re-export with the canonical name.
