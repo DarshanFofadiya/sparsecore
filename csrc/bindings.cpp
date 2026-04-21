@@ -26,6 +26,7 @@
 #include "kernels/padded_csr.hpp"
 #include "kernels/spmm.hpp"
 #include "kernels/spmm_neon.hpp"
+#include "kernels/spmm_grad.hpp"
 
 namespace py = pybind11;
 
@@ -232,6 +233,94 @@ py::array_t<float> py_spmm_simd(
 
 
 // ─────────────────────────────────────────────────────────────────────────
+//  Python wrapper: spmm_grad_w
+//
+//  Compute dL/dW at live slots of W (milestone 4a-iv).
+//
+//  Takes three inputs:
+//    W   — sparse weight (we only read its index arrays, not values)
+//    dY  — upstream gradient, dense (M, N) float32
+//    X   — original forward input, dense (K, N) float32
+//
+//  Returns a 1-D NumPy float32 array of length W.total_capacity(),
+//  indexed the same way as W.values. Live slots get computed
+//  gradients; padding slots stay at 0.0 (from the kernel's internal
+//  memset). This layout aligns exactly with W.values, so an optimizer
+//  can do W.values -= lr * dW as a single vectorized subtraction
+//  without needing any slot-index mapping.
+//
+//  Shape checks:
+//    - dY and X must both be 2-D
+//    - dY.shape[0] must equal W.nrows
+//    - X.shape[0] must equal W.ncols
+//    - dY.shape[1] must equal X.shape[1] (the shared "N" dim)
+// ─────────────────────────────────────────────────────────────────────────
+py::array_t<float> py_spmm_grad_w(
+    const sparsecore::PaddedCSR& W,
+    py::array_t<float, py::array::c_style | py::array::forcecast> dY,
+    py::array_t<float, py::array::c_style | py::array::forcecast> X
+) {
+    py::buffer_info dy_info = dY.request();
+    py::buffer_info x_info = X.request();
+
+    if (dy_info.ndim != 2) {
+        throw std::invalid_argument(
+            "spmm_grad_w: dY must be 2-D, got ndim=" +
+            std::to_string(dy_info.ndim) + "."
+        );
+    }
+    if (x_info.ndim != 2) {
+        throw std::invalid_argument(
+            "spmm_grad_w: X must be 2-D, got ndim=" +
+            std::to_string(x_info.ndim) + "."
+        );
+    }
+
+    const int64_t M_dy = dy_info.shape[0];
+    const int64_t N_dy = dy_info.shape[1];
+    const int64_t K_x = x_info.shape[0];
+    const int64_t N_x = x_info.shape[1];
+
+    if (M_dy != W.nrows) {
+        throw std::invalid_argument(
+            "spmm_grad_w: dY.shape[0]=" + std::to_string(M_dy) +
+            " but W.nrows=" + std::to_string(W.nrows) +
+            ". dY must have the same row count as W."
+        );
+    }
+    if (K_x != W.ncols) {
+        throw std::invalid_argument(
+            "spmm_grad_w: X.shape[0]=" + std::to_string(K_x) +
+            " but W.ncols=" + std::to_string(W.ncols) +
+            ". X must have the same row count as W has columns."
+        );
+    }
+    if (N_dy != N_x) {
+        throw std::invalid_argument(
+            "spmm_grad_w: dY.shape[1]=" + std::to_string(N_dy) +
+            " must equal X.shape[1]=" + std::to_string(N_x) +
+            " (shared inner dim N)."
+        );
+    }
+
+    // Size the output to total_capacity to align with W.values. Padding
+    // slots stay 0.0 (from the kernel's internal memset), which is the
+    // correct neutral for gradient-descent updates.
+    const int32_t cap = W.total_capacity();
+    auto dW = py::array_t<float>({static_cast<py::ssize_t>(cap)});
+    py::buffer_info dw_info = dW.request();
+
+    const float* dY_ptr = static_cast<const float*>(dy_info.ptr);
+    const float* X_ptr = static_cast<const float*>(x_info.ptr);
+    float* dW_ptr = static_cast<float*>(dw_info.ptr);
+
+    sparsecore::spmm_grad_w(W, dY_ptr, N_dy, X_ptr, K_x, dW_ptr);
+
+    return dW;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
 //  Module registration.
 //  The first argument (_core) must match the name in setup.py's
 //  Pybind11Extension ("sparsecore._core" → everything after the dot).
@@ -262,6 +351,12 @@ PYBIND11_MODULE(_core, m) {
           "NEON SIMD sparse-dense matmul Y = W @ X. Same contract as "
           "spmm_scalar; the inner loop is vectorized 4-wide with NEON "
           "FMA. Numerically agrees with spmm_scalar within rtol=atol=1e-5.");
+
+    m.def("spmm_grad_w", &py_spmm_grad_w,
+          "Compute dL/dW at live slots of W. Given upstream gradient dY "
+          "(M, N) and forward input X (K, N), returns a 1-D float32 array "
+          "of length W.nnz() aligned with W.values. The dense-simulated "
+          "anti-pattern materializes a full (M, K) gradient; we do not.");
 
     // ═════════════════════════════════════════════════════════════════════
     //  PaddedCSR — sparse matrix storage with padded rows for O(1) insert.
