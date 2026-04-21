@@ -70,6 +70,36 @@ But the headline number (1.17× over AMX at 99%) comes almost entirely
 from skipping zero entries, not from vectorization cleverness. That's
 the right story for our positioning: **sparsity is the moat, not SIMD**.
 
+## What we are NOT doing (and why)
+
+**Multi-threading.** Our kernel runs on exactly one CPU core. We're not
+using OpenMP, `std::thread`, `ATen::parallel_for`, or any fork-join
+primitive. On an M3 Pro with 12 cores total, we're using 1.
+
+By contrast, `torch.set_num_threads()` defaults to 6 on this machine.
+But — and this is the interesting part — forcing torch to 1 thread
+(`torch.set_num_threads(1)`) **barely slowed it down on this problem**:
+
+```
+multi-thread torch @ 99%:  0.80 ms
+single-thread torch @ 99%: 0.80 ms
+```
+
+That's the AMX coprocessor signature. AMX is a fixed piece of silicon
+that doesn't scale with thread count. Our loss to torch at low
+sparsity is not a threading problem — it's an AMX vs general-purpose
+CPU problem, and adding threads to our kernel wouldn't close it.
+
+Where multi-threading WILL matter for us:
+- Large problems where AMX saturates (e.g., `M=16384, K=4096, N=2048`
+  in a real transformer layer)
+- Non-Apple CPUs where there is no AMX to contend with — threading
+  becomes the primary performance lever
+
+Roadmap: multi-threading is a post-v0.1 optimization. We'll add it
+when we see actual training workloads that bottleneck on single-core
+throughput.
+
 ## What this means for the project narrative
 
 We initially framed SpMM as "beating dense via aggressive SIMD." The
