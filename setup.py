@@ -62,9 +62,14 @@ else:
 ext_modules = [
     Pybind11Extension(
         name="sparsecore._core",
+        # All C++ sources that need to be compiled and linked together.
+        # Kernels go in csrc/kernels/*; bindings.cpp is the pybind11 entry point.
         sources=[
-            "csrc/bindings.cpp",  # added in Milestone 1d
+            "csrc/bindings.cpp",
+            "csrc/kernels/double_tensor.cpp",
+            "csrc/kernels/vector_dot.cpp",
         ],
+        # Include paths used for `#include "kernels/foo.hpp"` etc.
         include_dirs=["csrc"],
         cxx_std=17,
         extra_compile_args=extra_compile_args,
