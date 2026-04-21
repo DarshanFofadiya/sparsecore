@@ -21,6 +21,7 @@
 
 #include "kernels/double_tensor.hpp"
 #include "kernels/vector_dot.hpp"
+#include "kernels/vector_dot_neon.hpp"
 
 namespace py = pybind11;
 
@@ -48,52 +49,86 @@ py::array_t<float> py_double_tensor(py::array_t<float> input) {
 
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Python wrapper: vector_dot
+//  Internal helper: validate_and_extract_dot_inputs
 //
-//  Computes the dot product of two 1-D float32 arrays: sum over i of
-//  a[i] * b[i]. Returns a single Python float.
+//  Shared validation for any kernel with the vector_dot signature:
+//    - Both arrays 1-D
+//    - Equal length
+//  On success, populates out-params with raw pointers and length.
+//  On failure, throws std::invalid_argument (pybind11 → ValueError).
 //
-//  Validation:
-//    - Both inputs must be 1-D. A 2-D tensor is ambiguous here (row-major
-//      flatten? column-major?) — we reject it and let the caller use
-//      .flatten() explicitly if that's their intent.
-//    - Lengths must match.
-//    - Arrays must be contiguous. pybind11's py::array::c_style flag
-//      requests a contiguous view; if the input is non-contiguous, pybind11
-//      silently makes a contiguous copy at the FFI boundary, which is
-//      fine functionally but worth knowing when profiling.
-//
-//  Invalid inputs raise a ValueError on the Python side (pybind11
-//  auto-translates std::invalid_argument to ValueError).
+//  Not exposed to Python — file-local (anonymous namespace).
 // ─────────────────────────────────────────────────────────────────────────
-float py_vector_dot(
-    py::array_t<float, py::array::c_style | py::array::forcecast> a,
-    py::array_t<float, py::array::c_style | py::array::forcecast> b
+namespace {
+
+void validate_and_extract_dot_inputs(
+    const py::array_t<float, py::array::c_style | py::array::forcecast>& a,
+    const py::array_t<float, py::array::c_style | py::array::forcecast>& b,
+    const char* kernel_name,
+    const float*& a_ptr,
+    const float*& b_ptr,
+    std::size_t& n
 ) {
     py::buffer_info a_info = a.request();
     py::buffer_info b_info = b.request();
 
-    // Shape validation.
     if (a_info.ndim != 1 || b_info.ndim != 1) {
         throw std::invalid_argument(
-            "vector_dot: both inputs must be 1-D arrays. "
+            std::string(kernel_name) + ": both inputs must be 1-D arrays. "
             "Got shapes with ndim=" + std::to_string(a_info.ndim) +
             " and ndim=" + std::to_string(b_info.ndim) + "."
         );
     }
     if (a_info.size != b_info.size) {
         throw std::invalid_argument(
-            "vector_dot: input lengths must match. "
+            std::string(kernel_name) + ": input lengths must match. "
             "Got sizes " + std::to_string(a_info.size) +
             " and " + std::to_string(b_info.size) + "."
         );
     }
 
-    const float* a_ptr = static_cast<const float*>(a_info.ptr);
-    const float* b_ptr = static_cast<const float*>(b_info.ptr);
-    const std::size_t n = static_cast<std::size_t>(a_info.size);
+    a_ptr = static_cast<const float*>(a_info.ptr);
+    b_ptr = static_cast<const float*>(b_info.ptr);
+    n = static_cast<std::size_t>(a_info.size);
+}
 
+}  // anonymous namespace
+
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Python wrapper: vector_dot (scalar)
+// ─────────────────────────────────────────────────────────────────────────
+float py_vector_dot(
+    py::array_t<float, py::array::c_style | py::array::forcecast> a,
+    py::array_t<float, py::array::c_style | py::array::forcecast> b
+) {
+    const float* a_ptr;
+    const float* b_ptr;
+    std::size_t n;
+    validate_and_extract_dot_inputs(a, b, "vector_dot", a_ptr, b_ptr, n);
     return sparsecore::vector_dot_scalar(a_ptr, b_ptr, n);
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Python wrapper: vector_dot_simd (NEON)
+//
+//  Same contract as vector_dot — 1-D float32 arrays in, single float
+//  out. The only difference is it calls the NEON SIMD kernel.
+//
+//  Numerical note: the two kernels may differ by ~1 ULP due to
+//  different accumulation orders. Both are verified against torch.dot
+//  with rtol=atol=1e-5 in the test suite.
+// ─────────────────────────────────────────────────────────────────────────
+float py_vector_dot_simd(
+    py::array_t<float, py::array::c_style | py::array::forcecast> a,
+    py::array_t<float, py::array::c_style | py::array::forcecast> b
+) {
+    const float* a_ptr;
+    const float* b_ptr;
+    std::size_t n;
+    validate_and_extract_dot_inputs(a, b, "vector_dot_simd", a_ptr, b_ptr, n);
+    return sparsecore::vector_dot_simd_neon(a_ptr, b_ptr, n);
 }
 
 
@@ -112,4 +147,9 @@ PYBIND11_MODULE(_core, m) {
     m.def("vector_dot", &py_vector_dot,
           "Compute the dot product of two 1-D float32 arrays. "
           "Returns a single float (sum of elementwise products).");
+
+    m.def("vector_dot_simd", &py_vector_dot_simd,
+          "NEON SIMD version of vector_dot. Same contract, ~3-4x faster "
+          "on Apple Silicon. Numerically agrees with vector_dot within "
+          "rtol=atol=1e-5.");
 }

@@ -68,6 +68,7 @@ ext_modules = [
             "csrc/bindings.cpp",
             "csrc/kernels/double_tensor.cpp",
             "csrc/kernels/vector_dot.cpp",
+            "csrc/kernels/vector_dot_neon.cpp",
         ],
         # Include paths used for `#include "kernels/foo.hpp"` etc.
         include_dirs=["csrc"],
