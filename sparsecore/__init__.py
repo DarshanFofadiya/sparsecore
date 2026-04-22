@@ -4,6 +4,9 @@ SparseCore — dynamic sparse training for PyTorch, CPU-native, Apple Silicon fi
 Public API (v0.1):
     PaddedCSR          — sparse matrix storage with padded rows for O(1) insert.
     spmm(W, X)         — sparse-dense matmul Y = W @ X, returns torch.Tensor.
+    SparseLinear       — nn.Module, drop-in replacement for nn.Linear with
+                         PaddedCSR-backed weights. Plugs into standard
+                         PyTorch training (torch.optim, state_dict, etc.).
 
 Factory helpers on PaddedCSR:
     PaddedCSR.from_dense(W, *, threshold=0.0, padding_ratio=0.2)
@@ -22,6 +25,7 @@ See docs/PROJECT_OVERVIEW.md for the full mission and roadmap.
 from sparsecore._core import PaddedCSR as _PaddedCSRCpp
 from sparsecore import layout as _layout
 from sparsecore.ops import spmm
+from sparsecore.nn import SparseLinear
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -43,5 +47,5 @@ _PaddedCSRCpp.transpose = _layout.transpose
 PaddedCSR = _PaddedCSRCpp
 
 
-__all__ = ["PaddedCSR", "spmm"]
+__all__ = ["PaddedCSR", "spmm", "SparseLinear"]
 __version__ = "0.0.1"

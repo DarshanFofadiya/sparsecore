@@ -64,7 +64,6 @@ except ImportError:
 
 import sparsecore
 from sparsecore import PaddedCSR
-from sparsecore.ops import _SpMMFunction
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -269,60 +268,50 @@ def train_dense(train_loader, test_loader, sparsity: float) -> RunResult:
 
 def train_sparse(train_loader, test_loader, sparsity: float) -> RunResult:
     """
-    Train an MLP where the hidden layer is a SparseCore PaddedCSR with
-    genuinely sparse storage. Input and output layers stay dense.
+    Train an MLP where the hidden layer is a SparseCore ``SparseLinear``
+    backed by PaddedCSR storage. Input and output layers stay dense.
 
-    This is the flagship: our actual product's training loop.
+    This is the flagship: our actual product's training loop, as of
+    milestone 4b. Notice how little of this function actually mentions
+    SparseCore — the whole training loop looks identical to a dense
+    PyTorch training loop, except for one line:
+
+        fc1 = sparsecore.SparseLinear(784, HIDDEN, sparsity=sparsity, bias=False)
+
+    That is the "two-line adoption" promise stated in PROJECT_OVERVIEW.md.
     """
     torch.manual_seed(0)
-    # Input layer: 784 → HIDDEN, stored as PaddedCSR at the given sparsity.
-    bound = 1.0 / (784 ** 0.5)
-    W1_init = (torch.rand(HIDDEN, 784) * 2 - 1) * bound
-    mask1 = (torch.rand(HIDDEN, 784) >= sparsity).float()
-    W1_init = W1_init * mask1
-    W1_csr = PaddedCSR.from_dense(W1_init)
-    W1_values_t = torch.from_numpy(np.asarray(W1_csr.values)).requires_grad_(True)
 
-    # Output layer: HIDDEN → 10 (dense, small)
+    # The ONE sparse-specific line in this training loop.
+    fc1 = sparsecore.SparseLinear(784, HIDDEN, sparsity=sparsity, bias=False)
     fc2 = nn.Linear(HIDDEN, 10, bias=False)
 
-    # Plain SGD on both parameter sets
-    params = [W1_values_t, fc2.weight]
+    # Standard torch.optim usage — no special sparse-aware optimizer.
+    opt = torch.optim.SGD(list(fc1.parameters()) + list(fc2.parameters()), lr=LR)
 
-    model_bytes = sparse_model_bytes(W1_csr)
+    # For the memory-at-rest column of the results table: read the live
+    # count off the SparseLinear layer. The bytes helper still operates
+    # on the underlying PaddedCSR.
+    num_live_params = fc1.nnz
+    model_bytes = sparse_model_bytes(fc1._csr)
 
     losses: list[float] = []
-    num_live_params = W1_csr.nnz
     t_start = time.perf_counter()
     step_times: list[float] = []
 
     for epoch in range(NUM_EPOCHS):
         for batch_idx, (images, labels) in enumerate(train_loader):
-            x = images.view(images.size(0), -1).t()  # (784, B)
+            # (B, 784) — SparseLinear handles the (*, H_in) -> (*, H_out) shape contract.
+            x = images.view(images.size(0), -1)
 
             t_step = time.perf_counter()
 
-            # Zero all grads
-            if W1_values_t.grad is not None:
-                W1_values_t.grad.zero_()
-            if fc2.weight.grad is not None:
-                fc2.weight.grad.zero_()
-
-            # Forward through the sparse layer (custom autograd)
-            h_pre = _SpMMFunction.apply(W1_values_t, W1_csr, x, "simd")  # (HIDDEN, B)
-            h = F.relu(h_pre)
-            # Output layer dense
-            logits = fc2.weight @ h  # (10, B)
-            loss = F.cross_entropy(logits.t(), labels)
-
-            # Backward
+            opt.zero_grad()
+            h = F.relu(fc1(x))            # sparse forward
+            logits = fc2(h)               # dense output layer
+            loss = F.cross_entropy(logits, labels)
             loss.backward()
-
-            # SGD step
-            with torch.no_grad():
-                W1_values_t.data -= LR * W1_values_t.grad
-                W1_csr.values[:] = W1_values_t.data.numpy()
-                fc2.weight.data -= LR * fc2.weight.grad
+            opt.step()
 
             step_times.append(time.perf_counter() - t_step)
             if (len(losses) * LOG_EVERY) < (epoch * len(train_loader) + batch_idx + 1):
@@ -330,23 +319,22 @@ def train_sparse(train_loader, test_loader, sparsity: float) -> RunResult:
 
     total_s = time.perf_counter() - t_start
 
-    # Evaluate
+    # Evaluate. We keep using the plain sparsecore.spmm() for eval
+    # (no autograd overhead). Same weights via fc1._csr.
     with torch.no_grad():
         correct = 0
         total = 0
         for images, labels in test_loader:
-            x = images.view(images.size(0), -1).t()
-            # Use the fast (no-autograd) path here — it's just the forward kernel
-            h = sparsecore.spmm(W1_csr, x)
-            h = F.relu(h)
-            logits = fc2.weight @ h
-            pred = logits.t().argmax(dim=1)
+            x = images.view(images.size(0), -1)
+            h = F.relu(fc1(x))
+            logits = fc2(h)
+            pred = logits.argmax(dim=1)
             correct += (pred == labels).sum().item()
             total += labels.size(0)
         acc = correct / total
 
     return RunResult(
-        sparsity=1.0 - (W1_csr.nnz / (HIDDEN * 784)),
+        sparsity=1.0 - fc1.density,
         losses=losses,
         test_accuracy=acc,
         ms_per_step=np.mean(step_times) * 1000,

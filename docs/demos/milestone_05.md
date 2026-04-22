@@ -8,7 +8,7 @@ what sparsity does your model still learn the task?
 
 It also validates autograd correctness in the strongest possible way: at
 0% sparsity, the sparse and dense paths reach **exactly the same test
-accuracy (92.35%)**. If there were any bug in our backward, the two
+accuracy (92.29%)**. If there were any bug in our backward, the two
 paths would drift — instead, they produce bit-identical learning
 trajectories when they're mathematically equivalent.
 
@@ -23,15 +23,22 @@ python examples/demo_05_mnist.py
 
 ## Results (M3 Pro, 3 epochs, 512-unit hidden layer)
 
+As of milestone 4b the sparse path uses `sparsecore.SparseLinear`. The
+numbers below are from that rerun. They drift <0.2 pp from the
+pre-4b manual-`_SpMMFunction.apply` implementation — the tiny drift
+comes from `SparseLinear` draining PyTorch's RNG in a slightly
+different order while building the random mask. The correctness oracle
+still holds: at 0% sparsity, sparse and dense both reach 92.29%.
+
 | Sparsity | Live params | Dense acc  | Sparse acc | Accuracy gap | Dense time | Sparse time | Dense KB | Sparse KB | Mem ratio |
 |----------|-------------|------------|------------|--------------|------------|-------------|----------|-----------|-----------|
-| 0%       | 401,408     | 92.35%     | **92.35%** | 0.00 pp      | 7.4s       | 130.8s      | 3,136    | 5,652     | 180%      |
-| 50%      | 200,721     | 92.17%     | 91.13%     | -1.04 pp     | 8.5s       | 72.6s       | 3,136    | 2,942     | 94%       |
-| 70%      | 120,840     | 92.18%     | 90.35%     | -1.83 pp     | 8.2s       | 47.7s       | 3,136    | 1,796     | 57%       |
-| 80%      | 80,305      | 92.11%     | 89.76%     | -2.35 pp     | 8.1s       | 33.4s       | 3,136    | 1,218     | 39%       |
-| 90%      | 40,206      | 92.10%     | 88.65%     | -3.45 pp     | 7.9s       | 20.7s       | 3,136    | 574       | 18%       |
-| 95%      | 19,992      | 92.07%     | 87.00%     | -5.07 pp     | 7.8s       | 14.5s       | 3,136    | 294       | 9%        |
-| 99%      | 3,881       | 91.98%     | 79.13%     | -12.85 pp    | 8.3s       | 9.8s        | 3,136    | 70        | 2%        |
+| 0%       | 401,408     | 92.29%     | **92.29%** | 0.00 pp      | 7.5s       | 129.7s      | 3,136    | 5,652     | 180%      |
+| 50%      | 200,721     | 92.06%     | 91.12%     | -0.94 pp     | 7.9s       | 68.1s       | 3,136    | 2,831     | 90%       |
+| 70%      | 120,840     | 92.07%     | 90.45%     | -1.62 pp     | 7.9s       | 43.7s       | 3,136    | 1,708     | 55%       |
+| 80%      | 80,305      | 91.99%     | 89.72%     | -2.27 pp     | 8.0s       | 31.7s       | 3,136    | 1,138     | 36%       |
+| 90%      | 40,206      | 91.99%     | 88.56%     | -3.43 pp     | 7.9s       | 20.6s       | 3,136    | 574       | 18%       |
+| 95%      | 19,992      | 91.92%     | 86.92%     | -5.00 pp     | 8.0s       | 14.7s       | 3,136    | 290       | 9%        |
+| 99%      | 3,881       | 91.93%     | 78.70%     | -13.23 pp    | 8.0s       | 9.7s        | 3,136    | 63        | 2%        |
 
 Loss curves: see `demo_05_mnist_curves.png` next to this file.
 
@@ -152,10 +159,10 @@ dense). From there the curve is steep: 57% at 70% sparsity, 18% at
 
 | What you care about     | Best operating point | Sparsity | Accuracy | Memory |
 |-------------------------|----------------------|----------|----------|--------|
-| Maximum accuracy        | dense                | 0%       | 92.35%   | 100%   |
-| Most memory per accuracy point lost | moderate sparse | 80%  | 89.76%   | 39%    |
-| Aggressive research trade | high sparse        | 90%      | 88.65%   | 18%    |
-| Memory-constrained only | very sparse          | 99%      | 79.13%   | 2%     |
+| Maximum accuracy        | dense                | 0%       | 92.29%   | 100%   |
+| Most memory per accuracy point lost | moderate sparse | 80%  | 89.72%   | 36%    |
+| Aggressive research trade | high sparse        | 90%      | 88.56%   | 18%    |
+| Memory-constrained only | very sparse          | 99%      | 78.70%   | 2%     |
 
 The "80% sparsity, 39% memory, -2.35 pp accuracy" row is where the
 dollar-per-accuracy ratio is healthiest for this task. That's the
@@ -221,11 +228,19 @@ self.fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)
 
 - 66ad25a — feat(demo): MNIST at multiple sparsities + memory-at-rest column
 - 1d551b0 — feat(demo): convergence-to-exhaustion at 90% sparsity (demos 6 + 7)
-- (this commit) — feat(demo): full converged-vs-converged answer at 90% (demo 8)
+- 7614bab — feat(demo): converged-vs-converged answer at 90% (demo 8)
+- (this commit) — feat(nn): SparseLinear nn.Module + demo_05 rewrite to use it
 
 ## What's next
 
-Milestone 4b: `SparseLinear(nn.Module)` wraps `_SpMMFunction` so users
-never touch raw autograd. That's the two-line-adoption promise made in
-`docs/PROJECT_OVERVIEW.md`. After 4b we'll rewrite this demo using the
-clean API and it becomes a contribution-ready example.
+Milestone 4c: OpenMP parallelization of `spmm_simd` and `spmm_grad_w`.
+Our current forward/backward is single-threaded; on an M3 Pro that
+leaves 10 performance cores idle. Parallelizing across W's rows is
+embarrassingly parallel — this is the highest-ROI kernel change we
+have left on the roadmap before any DST work. Target: measurable
+per-epoch speedup on the same MNIST sweep above.
+
+After 4c: milestone 4d introduces the `Router` API (Cerebras-inspired
+pluggable sparsity algorithm base class). That unlocks 4e (SET,
+random-regrow) and 4f (RigL, gradient-regrow) as ~100-line Python
+plugins on top.

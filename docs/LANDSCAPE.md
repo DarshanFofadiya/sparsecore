@@ -145,3 +145,36 @@ Every project listed above has already solved problems we will hit. Before desig
 This is engineering humility, not laziness. Our moats are the Padded-CSR layout and the Apple Silicon NEON kernels — everything else should match community conventions. See `.kiro/steering/borrow-dont-reinvent.md` for the full policy and the priority reference list.
 
 Contributions that propose new API patterns are welcome, but expected to include a "prior art" section explaining what existing project they considered and why this design is preferred.
+
+---
+
+## Open questions & deferred experiments
+
+Things we've noticed but haven't answered yet. Each is a candidate for a
+future demo or benchmark in its own right.
+
+### Sparse 90% vs narrow dense at matched parameter count
+
+Our demo 8 shows sparse 784→512→10 @ 90% hits 97.45% on MNIST for
+~40k live params in the first layer. A "narrow dense" version —
+784→51→10 with ~40k params and every neuron fully connected — would
+have the same parameter budget but a fundamentally different
+computational graph:
+
+- Sparse: 512 output neurons, each seeing ~10% of input features
+  (a *random subset*, different per neuron).
+- Narrow dense: 51 output neurons, each seeing *all* input features.
+
+The hypothesis (backed by the Lottery Ticket Hypothesis and Liu et al.
+2019, "Sparse Networks from Scratch") is that sparse beats narrow
+dense at matched params because 512 sparse specialists can cover
+more hypothesis space than 51 dense generalists — even though both
+have the same FLOP budget. That hypothesis has good theoretical support
+but deserves a concrete SparseCore-native measurement before we rely
+on it in the launch blog.
+
+Estimated cost: ~10 minutes of wallclock (one extra training run of
+the narrow model) plus a few lines of demo code. Deferred for now so
+we can focus on shipping `SparseLinear` (milestone 4b) and OpenMP
+parallelization (milestone 4c). Tracked as a follow-up; will get its
+own demo when it lands.
