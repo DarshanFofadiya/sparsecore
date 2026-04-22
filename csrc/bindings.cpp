@@ -501,6 +501,53 @@ PYBIND11_MODULE(_core, m) {
              "Verify all 8 invariants from design doc §2.2; raise ValueError "
              "with a descriptive message on any violation.")
 
+        // ─── Mutation: rewrite a single row atomically ───────────────────
+        //
+        // Python-facing signature: `csr.rewrite_row(row_idx, new_cols, new_values)`
+        //
+        // new_cols and new_values are accepted as Python sequences
+        // (lists, numpy arrays, tuples) and copied into std::vector
+        // inside the binding. This ~30 μs copy is amortized over
+        // whole-row mutations that happen at most every N training
+        // steps, so the overhead is irrelevant.
+        //
+        // DST algorithms (SET, RigL) compute the desired row content
+        // in Python and call this to materialize it. All invariant
+        // maintenance (column sort, padding sentinel, row_nnz) lives
+        // in C++ so Python code cannot corrupt the CSR.
+        .def("rewrite_row",
+             [](sparsecore::PaddedCSR& self,
+                int64_t row_idx,
+                py::array_t<int32_t, py::array::c_style | py::array::forcecast> new_cols,
+                py::array_t<float,   py::array::c_style | py::array::forcecast> new_values) {
+                 // py::array_t::forcecast means pybind11 converts any
+                 // numeric input (int lists, float32/64 arrays) to the
+                 // declared dtype automatically. This matches how our
+                 // other kernel bindings accept numpy arrays.
+
+                 auto cols_buf = new_cols.request();
+                 auto vals_buf = new_values.request();
+
+                 if (cols_buf.ndim != 1 || vals_buf.ndim != 1) {
+                     throw std::invalid_argument(
+                         "rewrite_row: new_cols and new_values must be 1-D arrays");
+                 }
+
+                 const int32_t* cols_ptr = static_cast<const int32_t*>(cols_buf.ptr);
+                 const float*   vals_ptr = static_cast<const float*>(vals_buf.ptr);
+                 std::vector<int32_t> cols(cols_ptr, cols_ptr + cols_buf.shape[0]);
+                 std::vector<float>   vals(vals_ptr, vals_ptr + vals_buf.shape[0]);
+
+                 self.rewrite_row(row_idx, cols, vals);
+             },
+             py::arg("row_idx"),
+             py::arg("new_cols"),
+             py::arg("new_values"),
+             "Replace row row_idx's live content with the given columns and values.\n"
+             "new_cols must be strictly ascending, distinct, and within [0, ncols).\n"
+             "Trailing slots in the row's capacity become padding (col=-1, value=0).\n"
+             "Used by DST algorithms (SET, RigL) for topology mutation.")
+
         // ─── Repr ────────────────────────────────────────────────────────
         .def("__repr__", [](const sparsecore::PaddedCSR& self) {
             return "PaddedCSR(nrows=" + std::to_string(self.nrows) +

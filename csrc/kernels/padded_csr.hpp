@@ -99,6 +99,35 @@ struct PaddedCSR {
 
     // Total padding slots (total_capacity - nnz). O(nrows).
     int64_t padding_slots() const;
+
+    // ─── Mutation: rewrite a single row atomically ─────────────────────
+    //
+    // Replaces row `i`'s live content with the (new_cols, new_values) pair.
+    // Remaining slots in the row's capacity become padding (col=-1, val=0).
+    //
+    // Preconditions (checked at runtime, throws std::invalid_argument):
+    //   - 0 <= row_idx < nrows
+    //   - new_cols.size() == new_values.size()
+    //   - new_cols.size() <= row_capacity[row_idx]
+    //   - new_cols sorted strictly ascending
+    //   - all new_cols in [0, ncols)
+    //
+    // This is the single mutation primitive DST algorithms use. They
+    // compute the desired new live set for a row in Python (SET: drop
+    // smallest K, grow K random empties; RigL: drop smallest K, grow K
+    // positions with highest dense gradient), then hand the complete
+    // row to this function. All invariant maintenance (padding sentinel,
+    // row_nnz update, sort order) is done here.
+    //
+    // Complexity: O(row_capacity[i]) — one pass over the row's slots.
+    // For realistic training workloads (row_capacity ~100-1000 per row)
+    // this is a few microseconds per call, invoked at most every N
+    // training steps.
+    void rewrite_row(
+        int64_t row_idx,
+        const std::vector<int32_t>& new_cols,
+        const std::vector<float>&   new_values
+    );
 };
 
 // ─────────────────────────────────────────────────────────────────────────

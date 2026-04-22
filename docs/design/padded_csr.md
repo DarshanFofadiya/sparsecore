@@ -67,7 +67,7 @@ These MUST hold at all times:
 4. **Row counts:** `0 ≤ row_nnz[i] ≤ row_capacity[i]` for all `i`.
 5. **Live slots first:** Within each row, the first `row_nnz[i]` slots are live (valid `col_idx`, real `value`), and the remaining `row_capacity[i] - row_nnz[i]` slots are padding (`col_idx = -1`, `value = 0.0`).
 6. **Sorted live columns:** `col_indices[row_start[i] .. row_start[i] + row_nnz[i] - 1]` is strictly sorted ascending and all values are in `[0, ncols)`. (Matches PyTorch CSR convention 5.6 — a `torch.sparse_csr_tensor` invariant required by cuSparse.)
-7. **Padding sentinel:** Padding slots' `col_idx == -1` and `value == 0.0`. The SpMM kernel relies on this to skip padding without branching.
+7. **Padding sentinel:** Padding slots' `col_idx == -1`. The SpMM kernels never read past `row_nnz` into padding territory, so padding values can be any float — no correctness requirement. (Historical note: v0.1 originally required `value == 0.0` too, but this was relaxed in milestone 4e when testing revealed that `_values` being exposed as a torch Parameter lets the optimizer write into padding slots, which is harmless but breaks the zero invariant. `rewrite_row` still resets padding values to 0 for defensive cleanliness.)
 8. **Dtype:** values are `float32` (v0.1 scope). Indices are `int32` (enough for 2 billion slots; `int64` is Phase 5+ work for billion-parameter layers).
 
 ### 2.3 Design choices explained

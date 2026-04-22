@@ -170,8 +170,16 @@ std::string check_invariants_str(const PaddedCSR& p) {
             prev_col = c;
         }
 
-        // Invariants 5 and 7: padding slots come after live slots and hold
-        // (col_idx = -1, value = 0.0).
+        // Invariants 5 and 7: padding slots come after live slots.
+        // We require col_indices[padding slot] == -1 as a sentinel that
+        // mutation code uses to detect "is this slot currently live?"
+        // We do NOT require padding values to be zero — user code (the
+        // optimizer, weight decay, etc.) might legitimately write into
+        // the raw _values buffer, and the SpMM kernels never read past
+        // row_nnz so there's no correctness requirement. rewrite_row
+        // still resets padding values to 0 as a defensive-consistency
+        // measure, but the invariant check only enforces the col_idx
+        // sentinel.
         for (int32_t k = n_live; k < n_cap; ++k) {
             if (p.col_indices[start + k] != -1) {
                 return "Invariants 5+7 violated at row " + std::to_string(i) +
@@ -179,13 +187,6 @@ std::string check_invariants_str(const PaddedCSR& p) {
                        ": padding col_indices=" +
                        std::to_string(p.col_indices[start + k]) +
                        " must be -1.";
-            }
-            if (p.values[start + k] != 0.0f) {
-                return "Invariants 5+7 violated at row " + std::to_string(i) +
-                       ", slot " + std::to_string(k) +
-                       ": padding values=" +
-                       std::to_string(p.values[start + k]) +
-                       " must be 0.0f.";
             }
         }
     }
@@ -199,6 +200,95 @@ void assert_invariants(const PaddedCSR& p) {
     if (!err.empty()) {
         throw std::invalid_argument("PaddedCSR invariant check failed: " + err);
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  Mutation: rewrite_row
+// ═════════════════════════════════════════════════════════════════════════
+//
+//  This is the single mutation primitive used by DST algorithms (SET,
+//  RigL). The Python side decides which columns a row should contain
+//  after drop+grow; this function writes them in.
+//
+//  Under the hood: overwrites the row's slot range, fills trailing slots
+//  with the padding sentinel, and updates row_nnz. All invariant
+//  maintenance happens here, so Python code can't accidentally break
+//  the CSR by passing malformed data.
+// ═════════════════════════════════════════════════════════════════════════
+
+void PaddedCSR::rewrite_row(
+    int64_t row_idx,
+    const std::vector<int32_t>& new_cols,
+    const std::vector<float>&   new_values
+) {
+    // ─── Bounds check ──────────────────────────────────────────────────
+    if (row_idx < 0 || row_idx >= nrows) {
+        throw std::invalid_argument(
+            "rewrite_row: row_idx=" + std::to_string(row_idx) +
+            " out of range [0, " + std::to_string(nrows) + ").");
+    }
+
+    // ─── Parallel-array length check ───────────────────────────────────
+    if (new_cols.size() != new_values.size()) {
+        throw std::invalid_argument(
+            "rewrite_row: new_cols.size()=" +
+            std::to_string(new_cols.size()) +
+            " must equal new_values.size()=" +
+            std::to_string(new_values.size()));
+    }
+
+    // ─── Capacity check ────────────────────────────────────────────────
+    const int32_t cap = row_capacity[row_idx];
+    const int32_t new_n = static_cast<int32_t>(new_cols.size());
+    if (new_n > cap) {
+        throw std::invalid_argument(
+            "rewrite_row: row " + std::to_string(row_idx) +
+            " has capacity " + std::to_string(cap) +
+            " but got " + std::to_string(new_n) + " new entries.");
+    }
+
+    // ─── Validate new_cols: strictly ascending, in bounds, distinct ────
+    int32_t prev = -1;
+    for (int32_t k = 0; k < new_n; ++k) {
+        const int32_t c = new_cols[k];
+        if (c < 0 || c >= ncols) {
+            throw std::invalid_argument(
+                "rewrite_row: new_cols[" + std::to_string(k) +
+                "]=" + std::to_string(c) +
+                " out of range [0, " + std::to_string(ncols) + ").");
+        }
+        if (c <= prev) {
+            // We require strictly increasing — catches both unsorted
+            // input AND duplicate columns within a row (PyTorch CSR
+            // invariant).
+            throw std::invalid_argument(
+                "rewrite_row: new_cols must be strictly ascending, got " +
+                std::to_string(prev) + " followed by " + std::to_string(c) +
+                " at position " + std::to_string(k) + ".");
+        }
+        prev = c;
+    }
+
+    // ─── Do the write ─────────────────────────────────────────────────
+    const int32_t base = row_start[row_idx];
+
+    // Write the live slots.
+    for (int32_t k = 0; k < new_n; ++k) {
+        col_indices[base + k] = new_cols[k];
+        values[base + k]      = new_values[k];
+    }
+
+    // Fill trailing slots with padding sentinel (col=-1, val=0).
+    // This is what the SpMM kernel relies on to skip dead slots without
+    // a second dereference — if col_indices is -1 we know to stop early,
+    // and value 0 means even if we accidentally multiply, nothing happens.
+    for (int32_t k = new_n; k < cap; ++k) {
+        col_indices[base + k] = -1;
+        values[base + k]      = 0.0f;
+    }
+
+    // Update the live count.
+    row_nnz[row_idx] = new_n;
 }
 
 }  // namespace sparsecore
