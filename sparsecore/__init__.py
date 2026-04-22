@@ -7,6 +7,8 @@ Public API (v0.1):
     SparseLinear       — nn.Module, drop-in replacement for nn.Linear with
                          PaddedCSR-backed weights. Plugs into standard
                          PyTorch training (torch.optim, state_dict, etc.).
+    SparsityAlgorithm  — base class for pluggable DST policies.
+    Static             — no-op sparsity algorithm (reference implementation).
 
 Factory helpers on PaddedCSR:
     PaddedCSR.from_dense(W, *, threshold=0.0, padding_ratio=0.2)
@@ -34,6 +36,7 @@ from sparsecore._core import PaddedCSR as _PaddedCSRCpp
 from sparsecore import layout as _layout
 from sparsecore.ops import spmm
 from sparsecore.nn import SparseLinear
+from sparsecore.router import SparsityAlgorithm, Static
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -55,5 +58,5 @@ _PaddedCSRCpp.transpose = _layout.transpose
 PaddedCSR = _PaddedCSRCpp
 
 
-__all__ = ["PaddedCSR", "spmm", "SparseLinear"]
+__all__ = ["PaddedCSR", "spmm", "SparseLinear", "SparsityAlgorithm", "Static"]
 __version__ = "0.0.1"
