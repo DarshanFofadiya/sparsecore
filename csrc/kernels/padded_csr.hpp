@@ -61,6 +61,18 @@ struct PaddedCSR {
     std::vector<int32_t> row_nnz;
     std::vector<int32_t> row_capacity;
 
+    // ─── Topology version counter ─────────────────────────────────────
+    //
+    // Monotonically increasing integer that bumps every time rewrite_row
+    // modifies the CSR's live-set. Used by callers to cache derived
+    // structures (like the transposed CSR, which is expensive to
+    // materialize) and invalidate them when topology changes.
+    //
+    // Starts at 0. Any code that wants to cache a transpose should
+    // record the version it was computed for, and recompute only when
+    // the current version differs.
+    int64_t topology_version = 0;
+
     // ─── Constructors ──────────────────────────────────────────────────
 
     // Empty constructor: builds a valid zero-nnz, zero-capacity matrix

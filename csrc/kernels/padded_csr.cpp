@@ -289,6 +289,10 @@ void PaddedCSR::rewrite_row(
 
     // Update the live count.
     row_nnz[row_idx] = new_n;
+
+    // Bump the topology version so anyone caching derived structures
+    // (like the transpose) can detect this change and invalidate.
+    topology_version += 1;
 }
 
 }  // namespace sparsecore

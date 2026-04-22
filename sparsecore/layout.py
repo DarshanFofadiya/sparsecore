@@ -418,3 +418,105 @@ def transpose(p: "_PaddedCSR", *, padding_ratio: float = 0.2) -> "_PaddedCSR":
         row_nnz=out_row_nnz.tolist(),
         row_capacity=out_row_capacity.tolist(),
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  transpose_with_perm — transpose that also returns a permutation map
+#
+#  Same output as `transpose(W)`, plus a parallel array `perm` of length
+#  WT.total_capacity where `perm[slot_wt]` is the slot index in W.values
+#  whose value belongs at WT.values[slot_wt]. Padding slots in WT get
+#  perm = -1.
+#
+#  Use case: caching. The expensive part of transpose is the ~1 ms of
+#  index-structure work (bincount, scatter of col_indices). The cheap
+#  part is copying values. If W's topology is unchanged but values have
+#  shifted (e.g., SGD updated W.values), we can skip the structure work
+#  and refresh WT.values with a single O(nnz) scatter:
+#
+#      WT.values[:] = W.values[perm]   # with perm[pad]=-1 writing 0
+#
+#  See sparsecore.ops._cached_transpose for the consumer.
+#
+#  This is a v0.1 optimization — the core transpose function above stays
+#  untouched. If the cache proves broken we just stop calling this one
+#  and fall back to the direct transpose.
+# ─────────────────────────────────────────────────────────────────────
+
+def transpose_with_perm(
+    p: "_PaddedCSR", *, padding_ratio: float = 0.2
+) -> tuple["_PaddedCSR", np.ndarray]:
+    """
+    Transpose `p` and also return the permutation map from WT slots to W slots.
+
+    Returns:
+        (WT, perm):
+            WT — PaddedCSR transpose of p (same as transpose(p))
+            perm — int64 array of length WT.total_capacity. For each
+                   slot s in WT, perm[s] is the slot index in W that
+                   holds the same numeric value (or -1 if s is padding).
+    """
+    M = p.nrows
+    K = p.ncols
+    nnz = p.nnz
+
+    values_view = p.values
+    col_view = p.col_indices
+    row_start = p.row_start
+    row_nnz = p.row_nnz
+
+    # Build the entry stream AND track each entry's slot index in W.values.
+    src_rows = np.empty(nnz, dtype=np.int32)
+    src_cols = np.empty(nnz, dtype=np.int32)
+    src_vals = np.empty(nnz, dtype=np.float32)
+    src_slots = np.empty(nnz, dtype=np.int64)   # NEW: slot index in W.values
+
+    offset = 0
+    for i in range(M):
+        n_live = int(row_nnz[i])
+        if n_live == 0:
+            continue
+        start = int(row_start[i])
+        src_rows[offset : offset + n_live] = i
+        src_cols[offset : offset + n_live] = col_view[start : start + n_live]
+        src_vals[offset : offset + n_live] = values_view[start : start + n_live]
+        # Each live slot s in W sits at W.values[start + k] for k in [0, n_live).
+        src_slots[offset : offset + n_live] = np.arange(start, start + n_live)
+        offset += n_live
+    assert offset == nnz
+
+    # Count per-output-row nnz.
+    out_row_nnz = np.bincount(src_cols, minlength=K).astype(np.int32)
+    out_row_capacity = _compute_row_capacity(out_row_nnz, padding_ratio)
+    out_row_start = np.concatenate(
+        ([0], np.cumsum(out_row_capacity[:-1]))
+    ).astype(np.int32)
+
+    total_capacity = int(out_row_capacity.sum())
+    out_values = np.zeros(total_capacity, dtype=np.float32)
+    out_cols = np.full(total_capacity, -1, dtype=np.int32)
+    # Permutation: default -1 (padding slot marker).
+    perm = np.full(total_capacity, -1, dtype=np.int64)
+
+    if nnz > 0:
+        sort_order = np.argsort(src_cols, kind="stable")
+        sorted_rows = src_cols[sort_order]
+        first_occurrence = np.searchsorted(sorted_rows, sorted_rows)
+        within_group_rank = np.arange(nnz, dtype=np.int32) - first_occurrence
+        dest_slots = out_row_start[sorted_rows] + within_group_rank
+
+        out_values[dest_slots] = src_vals[sort_order]
+        out_cols[dest_slots] = src_rows[sort_order]
+        # For each dest slot, record which W.values slot its value came from.
+        perm[dest_slots] = src_slots[sort_order]
+
+    WT = _core.PaddedCSR(
+        nrows=int(K),
+        ncols=int(M),
+        values=out_values.tolist(),
+        col_indices=out_cols.tolist(),
+        row_start=out_row_start.tolist(),
+        row_nnz=out_row_nnz.tolist(),
+        row_capacity=out_row_capacity.tolist(),
+    )
+    return WT, perm

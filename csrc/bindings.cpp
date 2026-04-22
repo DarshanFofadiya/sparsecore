@@ -533,6 +533,11 @@ PYBIND11_MODULE(_core, m) {
             return 1.0 - static_cast<double>(self.nnz()) /
                          static_cast<double>(self.nrows * self.ncols);
         })
+        .def_property_readonly("topology_version",
+            [](const sparsecore::PaddedCSR& self) { return self.topology_version; },
+            "Monotonically increasing counter bumped on every rewrite_row. "
+            "Used by external code (autograd, caches) to detect topology "
+            "changes and invalidate derived structures like transposes.")
 
         // ─── Zero-copy array views ───────────────────────────────────────
         // values[] is WRITABLE — optimizers update it during training via

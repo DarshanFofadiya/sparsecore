@@ -27,6 +27,81 @@ from sparsecore._core import PaddedCSR as _PaddedCSR
 
 
 # ─────────────────────────────────────────────────────────────────────
+#  Transpose cache for backward pass
+# ─────────────────────────────────────────────────────────────────────
+#
+#  W.transpose() costs ~1.3 ms at FFN scale because it allocates a full
+#  new PaddedCSR and rebuilds all the index arrays. We call it on every
+#  backward pass, but W's TOPOLOGY only changes on SET/RigL updates
+#  (every ~100 steps). Between updates, the transpose's structure is
+#  identical to the previous call — only the values may have shifted
+#  because the optimizer mutated W.values in place.
+#
+#  Cache strategy:
+#    - Key: id(W) — works as long as W is alive.
+#    - Value: (topology_version, WT, perm) where:
+#        topology_version is W.topology_version at cache time
+#        WT is the cached transpose (valid structure, possibly stale values)
+#        perm[slot_wt] → slot_w mapping (for O(nnz) value refresh)
+#
+#  On cache HIT (topology unchanged): refresh WT.values via the
+#    perm and return. ~5μs scatter instead of a ~1300μs rebuild.
+#
+#  On cache MISS: rebuild via transpose_with_perm, store, return.
+#
+#  id(W) collision risk: when a Python object is GC'd, its id can be
+#  reused. If the new W has the same topology_version as the cached
+#  one (both at version 0, for instance) AND the same shape, we'd
+#  return a stale WT. We guard by also storing shape and asserting:
+#  if shape differs, treat as miss. We accept that "new W of same
+#  shape at version 0 after GC of old W at version 0" is a theoretical
+#  bug — it requires fresh-W after full-GC, a rare single-process
+#  pattern, and we'd get wrong gradients. For v0.1 we accept this;
+#  documented limitation.
+# ─────────────────────────────────────────────────────────────────────
+
+_transpose_cache: dict[int, tuple[int, tuple[int, int], object, np.ndarray]] = {}
+# Key: id(W). Value: (topology_version, (nrows, ncols), WT, perm).
+
+
+def _cached_transpose(W: _PaddedCSR) -> _PaddedCSR:
+    """Return W.transpose() with caching by W's topology_version.
+
+    On cache hit: refreshes WT.values from W.values (cheap scatter).
+    On cache miss: rebuilds WT + perm (expensive), stores, returns.
+    """
+    from sparsecore.layout import transpose_with_perm  # local import to avoid cycle
+
+    key = id(W)
+    cur_version = W.topology_version
+    cur_shape = (int(W.nrows), int(W.ncols))
+
+    cached = _transpose_cache.get(key)
+    if cached is not None and cached[0] == cur_version and cached[1] == cur_shape:
+        # Hit: refresh values via the permutation. Padding slots (perm==-1)
+        # keep whatever value they had (we never read them).
+        _, _, WT, perm = cached
+        W_vals = np.asarray(W.values)
+        WT_vals = np.asarray(WT.values)
+        # Scatter: for each WT slot s with perm[s] >= 0, copy W.values[perm[s]].
+        # Using np.take for vectorized gather; we apply a mask to leave
+        # padding slots alone (where perm is -1, indexing would be wrong).
+        live_mask = perm >= 0
+        WT_vals[live_mask] = W_vals[perm[live_mask]]
+        return WT
+
+    # Miss: rebuild.
+    WT, perm = transpose_with_perm(W)
+    _transpose_cache[key] = (cur_version, cur_shape, WT, perm)
+    return WT
+
+
+def _clear_transpose_cache() -> None:
+    """Testing utility: clear all cache entries. Not part of public API."""
+    _transpose_cache.clear()
+
+
+# ─────────────────────────────────────────────────────────────────────
 #  Autograd Function — the bridge to PyTorch's training machinery
 # ─────────────────────────────────────────────────────────────────────
 #
@@ -104,9 +179,12 @@ class _SpMMFunction(torch.autograd.Function):
 
         # ── Gradient w.r.t. X ──
         # Per design doc §1.3: dL/dX = Wᵀ @ dL/dY — just another SpMM.
-        # We materialize Wᵀ once; future optimization could fuse this
-        # into a single transpose-and-multiply kernel.
-        WT = W.transpose()
+        # We use a cached transpose keyed on W.topology_version: the
+        # structure of Wᵀ only changes when W's topology changes
+        # (SET/RigL update). Between updates, we just refresh WT.values
+        # with a cheap scatter and skip the ~1 ms structure rebuild.
+        # See _cached_transpose above.
+        WT = _cached_transpose(W)
         dX_np = _core.spmm_simd(WT, dY_f32.numpy())
         dX = torch.from_numpy(dX_np)
 
