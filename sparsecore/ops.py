@@ -26,6 +26,9 @@ from sparsecore import _core
 from sparsecore._core import PaddedCSR as _PaddedCSR
 
 
+__all__ = ["spmm"]
+
+
 # ─────────────────────────────────────────────────────────────────────
 #  Transpose cache for backward pass
 # ─────────────────────────────────────────────────────────────────────

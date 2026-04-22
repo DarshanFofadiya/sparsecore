@@ -28,6 +28,16 @@ if TYPE_CHECKING:
     from sparsecore._core import PaddedCSR as _PaddedCSR
 
 
+__all__ = [
+    "from_dense",
+    "from_torch_sparse_csr",
+    "random",
+    "to_dense",
+    "transpose",
+    "transpose_with_perm",
+]
+
+
 # ─────────────────────────────────────────────────────────────────────
 #  Row-capacity computation
 # ─────────────────────────────────────────────────────────────────────

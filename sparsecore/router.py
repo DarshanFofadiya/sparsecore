@@ -45,6 +45,15 @@ if TYPE_CHECKING:
     from sparsecore.nn import SparseLinear
 
 
+__all__ = [
+    "SparsityAlgorithm",
+    "DynamicSparsityAlgorithm",
+    "Static",
+    "SET",
+    "RigL",
+]
+
+
 # ─────────────────────────────────────────────────────────────────────
 #  Base class: SparsityAlgorithm
 # ─────────────────────────────────────────────────────────────────────

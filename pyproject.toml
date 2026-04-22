@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sparsecore"
-version = "0.0.1"
+version = "0.1.0"
 description = "Dynamic sparse training for PyTorch, CPU-native, Apple Silicon first."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,12 +14,16 @@ license = { text = "MIT" }
 authors = [{ name = "SparseCore Contributors" }]
 keywords = ["pytorch", "sparsity", "dynamic-sparse-training", "neon", "apple-silicon"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
     "torch>=2.8",
@@ -31,8 +35,9 @@ dev = ["pytest>=7.0", "pybind11>=2.11"]
 demos = ["matplotlib>=3.7", "torchvision>=0.15"]
 
 [project.urls]
-Homepage = "https://github.com/sparsecore/sparsecore"
-Documentation = "https://github.com/sparsecore/sparsecore/tree/main/docs"
+Homepage = "https://github.com/DarshanFofadiya/sparsecore"
+Documentation = "https://github.com/DarshanFofadiya/sparsecore/tree/main/docs"
+Issues = "https://github.com/DarshanFofadiya/sparsecore/issues"
 
 [tool.setuptools.packages.find]
 include = ["sparsecore*"]
@@ -50,3 +55,92 @@ exclude = ["tests*", "examples*", "csrc*", "docs*"]
 addopts = "--import-mode=importlib"
 testpaths = ["tests"]
 pythonpath = []  # explicitly do NOT add the workspace root
+
+
+# ─────────────────────────────────────────────────────────────────────
+# cibuildwheel configuration.
+#
+# Drives the PyPI wheel build in .github/workflows/wheels.yml.
+#
+# Key decisions:
+#   - Skip 32-bit builds and PyPy (we target CPython only).
+#   - Skip musllinux (Alpine) for v0.1 — libomp on musl is its own
+#     adventure. Classic glibc manylinux covers our DST audience.
+#   - Bundle libomp into the wheel via repair tools:
+#       Linux:  auditwheel repair (default cibuildwheel behavior)
+#       macOS:  delocate-wheel (default cibuildwheel behavior)
+#     Both are automatic once libomp is linked — no custom repair
+#     command needed.
+#   - Run a smoke test inside each wheel's environment before
+#     accepting the wheel. The smoke test imports sparsecore,
+#     runs a forward + backward, and verifies gradients flow.
+#     Full pytest suite isn't run inside the wheel env because
+#     tests/ aren't shipped in the wheel.
+# ─────────────────────────────────────────────────────────────────────
+
+[tool.cibuildwheel]
+# Build for CPython 3.11, 3.12, 3.13 only.
+build = "cp311-* cp312-* cp313-*"
+# Explicit skip list. Matches what we want even without it, but
+# documents intent.
+skip = [
+    "*-win32",          # 32-bit Windows (we skip Windows entirely for v0.1)
+    "*-manylinux_i686", # 32-bit Linux
+    "*-musllinux_*",    # Alpine — libomp story is v0.2
+    "pp*",              # PyPy
+]
+
+# After building each wheel, run this command inside the wheel's env
+# to verify it actually loads and works. {project} is the source dir.
+test-command = "python {project}/scripts/smoke_test.py"
+# Install torch at test time (our dependency, but we want the wheel env
+# to install it fresh, not carry it over from build).
+# This mirrors what a real user's `pip install sparsecore` will do.
+test-requires = []
+
+# ─── macOS-specific configuration ─────────────────────────────────
+[tool.cibuildwheel.macos]
+# Minimum macOS version we build against. 11.0 = Big Sur = the oldest
+# OS that supports arm64 natively. Setting MACOSX_DEPLOYMENT_TARGET
+# locks the wheel to work on this-or-newer.
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
+# Homebrew installs libomp to /opt/homebrew (arm64) or /usr/local
+# (x86_64). We prepend these to the build environment so setup.py
+# finds libomp headers (we only need headers — the runtime lib comes
+# from torch's wheel).
+#
+# IMPORTANT: we install torch at build time so setup.py's first-branch
+# logic fires (link rpath into torch/lib/libomp.dylib). Without this,
+# the fallback branch links to Homebrew's libomp, which collides with
+# torch's libomp at runtime and aborts OpenMP initialization. This
+# was observed in a local wheel-build dry run; see docs/RELEASE.md
+# troubleshooting table.
+before-build = [
+    "brew install libomp || true",
+    "pip install torch>=2.8",
+]
+# When delocate-wheel copies libomp into the wheel, its default
+# behavior on arm64 is to bundle /opt/homebrew/opt/libomp/lib/libomp.dylib.
+# We DON'T want that — we want the wheel to stay reliant on torch's
+# libomp at runtime to avoid the double-library collision.
+#
+# --require-archs arm64 ensures the bundled libs are architecture-
+# compatible; more importantly the rpath to @loader_path/../torch/lib
+# is preserved by delocate's default behavior so a user's
+# `import sparsecore` after `import torch` finds torch's libomp.
+repair-wheel-command = [
+    "DYLD_LIBRARY_PATH=$(python -c 'import torch, os; print(os.path.join(os.path.dirname(torch.__file__), \"lib\"))') delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+]
+
+# ─── Linux-specific configuration ─────────────────────────────────
+[tool.cibuildwheel.linux]
+# manylinux_2_28 (Rocky 8) — the current recommended manylinux base.
+# Ships GCC 12, libstdc++.so.6 compatible with most modern Linux.
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+# libomp equivalent on Linux is libgomp, which ships with gcc. No
+# extra install needed inside the manylinux container — it's already
+# there. We do need torch at build time so setup.py links cleanly.
+before-build = [
+    "pip install torch>=2.8",
+]

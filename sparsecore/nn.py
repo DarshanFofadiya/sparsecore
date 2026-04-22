@@ -30,6 +30,9 @@ from sparsecore import layout as _layout
 from sparsecore.ops import _SpMMFunction
 
 
+__all__ = ["SparseLinear"]
+
+
 class SparseLinear(nn.Module):
     """
     A drop-in replacement for ``nn.Linear`` whose weight is stored as a
