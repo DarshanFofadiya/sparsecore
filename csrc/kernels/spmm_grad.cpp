@@ -18,6 +18,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 #include "spmm_grad.hpp"
+#include "parallel.hpp"
 
 #include <cstring>      // std::memset
 #include <stdexcept>    // std::invalid_argument
@@ -75,12 +76,16 @@ void spmm_grad_w(
     //   - accumulator `acc` stays in a register
     //   - N FMAs with sequential reads → ideal SIMD/auto-vectorization target
     //
-    // A plausible NEON hand-write would load 4 floats at a time from
-    // dY_row and X_row, multiply lane-wise, accumulate in a 4-wide
-    // register, then horizontal-sum at the end. Matches the structure
-    // of vector_dot_neon.cpp exactly. Deferred to post-4a per the
-    // design doc — get correctness end-to-end first.
+    // ─── Parallelism ──────────────────────────────────────────────────
+    // Each row i writes only to dW_values[row_start[i] : row_start[i]+n_live].
+    // Different i's slices don't overlap because PaddedCSR gives each
+    // row a distinct [start, start+capacity) range. So parallel writes
+    // are race-free without atomics.
     // ───────────────────────────────────────────────────────────────────
+    #if SCORE_HAVE_OPENMP
+    #pragma omp parallel for schedule(static) \
+        if(M >= SCORE_PARALLEL_ROW_THRESHOLD)
+    #endif
     for (int64_t i = 0; i < M; ++i) {
         const int32_t row_ptr = W.row_start[i];
         const int32_t n_live  = W.row_nnz[i];

@@ -1,4 +1,5 @@
 """SparseCore build script."""
+import os
 import sys
 import platform
 from setuptools import setup
@@ -23,6 +24,7 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 IS_APPLE_SILICON = (
     sys.platform == "darwin" and platform.machine() == "arm64"
 )
+IS_MACOS = sys.platform == "darwin"
 
 if IS_APPLE_SILICON:
     extra_compile_args = [
@@ -43,6 +45,109 @@ else:
         "-Wextra",
         "-fvisibility=hidden",
     ]
+
+extra_link_args: list[str] = []
+
+
+# ─────────────────────────────────────────────────────────────────────
+# OpenMP setup — optional but recommended.
+#
+# On macOS, Apple Clang does NOT ship OpenMP support by default. Users
+# install libomp via Homebrew (`brew install libomp`). When it's
+# present at the standard Homebrew paths we wire it in; if it's absent
+# we build without OpenMP and the kernels fall back to their
+# sequential path via the #ifdef _OPENMP guard in C++.
+#
+# On Linux, gcc/clang typically support `-fopenmp` directly. We try
+# that unconditionally; if the user's compiler doesn't know the flag
+# the build fails loudly (they can override via SPARSECORE_NO_OPENMP=1).
+#
+# Environment overrides:
+#   SPARSECORE_NO_OPENMP=1      → force-disable (useful for CI or
+#                                 debugging a non-OpenMP build)
+#   SPARSECORE_LIBOMP_PREFIX=/…  → point at a custom libomp install
+# ─────────────────────────────────────────────────────────────────────
+
+def configure_openmp() -> tuple[list[str], list[str], list[str]]:
+    """Return (compile_args, link_args, include_dirs) additions for OpenMP.
+
+    Returns three empty lists if OpenMP is disabled or unavailable.
+
+    Macos note: PyTorch ships its OWN libomp.dylib inside its wheel. If
+    we link a different libomp (e.g. Homebrew's) and both get loaded
+    into the same Python process, the two OpenMP runtimes abort each
+    other on startup. Our strategy:
+
+      1. If PyTorch is importable, prefer its bundled libomp headers
+         (from Homebrew) for compile, and link a weak SONAME so the
+         loader resolves to whichever libomp is already in the process
+         — which, when torch imports first, will be torch's.
+      2. If PyTorch isn't importable at build time, fall back to
+         Homebrew's libomp directly.
+    """
+    if os.environ.get("SPARSECORE_NO_OPENMP") == "1":
+        return [], [], []
+
+    if IS_MACOS:
+        # Headers only come from Homebrew (PyTorch's wheel doesn't ship
+        # the omp.h development header, only the runtime .dylib).
+        include_candidates = [
+            os.environ.get("SPARSECORE_LIBOMP_PREFIX"),
+            "/opt/homebrew/opt/libomp",
+            "/usr/local/opt/libomp",
+        ]
+        include_path = None
+        for prefix in include_candidates:
+            if prefix and os.path.isfile(os.path.join(prefix, "include", "omp.h")):
+                include_path = os.path.join(prefix, "include")
+                break
+
+        if include_path is None:
+            print(
+                "sparsecore: libomp headers not found at standard Homebrew "
+                "paths; building WITHOUT OpenMP. Install with "
+                "`brew install libomp` or set SPARSECORE_LIBOMP_PREFIX.",
+                file=sys.stderr,
+            )
+            return [], [], []
+
+        # Link strategy: prefer PyTorch's bundled libomp if we can find
+        # it, otherwise Homebrew's. Using `-rpath` tells the macOS
+        # dynamic loader where to search at runtime.
+        link_args = ["-lomp"]
+        try:
+            import torch  # type: ignore
+            torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
+            if os.path.isfile(os.path.join(torch_lib, "libomp.dylib")):
+                # Search torch/lib FIRST so we resolve to its libomp,
+                # matching whichever OpenMP runtime torch already loaded.
+                link_args = [
+                    "-L" + torch_lib,
+                    "-Wl,-rpath," + torch_lib,
+                    "-lomp",
+                ]
+        except ImportError:
+            # Fallback: use Homebrew's libomp.
+            hb_prefix = os.path.dirname(os.path.dirname(include_path))
+            link_args = [
+                "-L" + os.path.join(hb_prefix, "lib"),
+                "-Wl,-rpath," + os.path.join(hb_prefix, "lib"),
+                "-lomp",
+            ]
+
+        return (
+            ["-Xpreprocessor", "-fopenmp"],
+            link_args,
+            [include_path],
+        )
+
+    # Linux (and other POSIX): assume the compiler handles -fopenmp.
+    return ["-fopenmp"], ["-fopenmp"], []
+
+
+omp_compile, omp_link, omp_include = configure_openmp()
+extra_compile_args.extend(omp_compile)
+extra_link_args.extend(omp_link)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -75,9 +180,11 @@ ext_modules = [
             "csrc/kernels/spmm_grad.cpp",
         ],
         # Include paths used for `#include "kernels/foo.hpp"` etc.
-        include_dirs=["csrc"],
+        # OpenMP includes are appended by configure_openmp() above.
+        include_dirs=["csrc", *omp_include],
         cxx_std=17,
         extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
     ),
 ]
 

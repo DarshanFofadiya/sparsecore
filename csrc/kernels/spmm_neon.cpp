@@ -29,6 +29,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 #include "spmm_neon.hpp"
+#include "parallel.hpp"
 
 #include <cstring>      // std::memset
 #include <stdexcept>    // std::invalid_argument
@@ -69,6 +70,17 @@ void spmm_simd_neon(
     }
 
     // ─── Main triple-nested loop: i → s → (SIMD j) ─────────────────────
+    //
+    // ─── Parallelism ──────────────────────────────────────────────────
+    // Identical shape to spmm_scalar: each i writes only to Y[i, :],
+    // every read is const. The OpenMP `if` clause gates parallelism at
+    // runtime — small matrices stay sequential and avoid fork/join cost.
+    // See kernels/parallel.hpp.
+    // ───────────────────────────────────────────────────────────────────
+    #if SCORE_HAVE_OPENMP
+    #pragma omp parallel for schedule(static) \
+        if(M >= SCORE_PARALLEL_ROW_THRESHOLD)
+    #endif
     for (int64_t i = 0; i < M; ++i) {
         const int32_t row_ptr = W.row_start[i];
         const int32_t n_live  = W.row_nnz[i];

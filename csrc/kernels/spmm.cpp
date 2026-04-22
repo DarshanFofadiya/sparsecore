@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 #include "spmm.hpp"
+#include "parallel.hpp"
 
 #include <cstring>      // std::memset
 #include <stdexcept>    // std::invalid_argument
@@ -65,7 +66,25 @@ void spmm_scalar(
     //     Accumulate v * X[c, :] into Y[i, :].
     //
     // Row-major indexing: Y[i, j] is at Y[i * N + j]; X[c, j] is at X[c * N + j].
+    //
+    // ─── Parallelism ──────────────────────────────────────────────────
+    // The outer loop is embarrassingly parallel: each i writes only to
+    // its own row of Y (y_row = Y + i * N), and all reads are from
+    // W and X which are const. No locks, no atomics, no false sharing
+    // across cachelines if rows are at least N*4 bytes long.
+    //
+    // SCORE_PARALLEL_FOR is a compile-time shim:
+    //   - with OpenMP: expands to `#pragma omp parallel for schedule(static)`
+    //   - without   : expands to nothing, loop stays sequential
+    //
+    // For M below SCORE_PARALLEL_ROW_THRESHOLD the fork/join overhead
+    // dominates the work — `if(...)` clauses in the pragma gate the
+    // parallel region without duplicating the loop body.
     // ───────────────────────────────────────────────────────────────────
+    #if SCORE_HAVE_OPENMP
+    #pragma omp parallel for schedule(static) \
+        if(M >= SCORE_PARALLEL_ROW_THRESHOLD)
+    #endif
     for (int64_t i = 0; i < M; ++i) {
         const int32_t row_ptr = W.row_start[i];
         const int32_t n_live  = W.row_nnz[i];
@@ -76,7 +95,7 @@ void spmm_scalar(
             const float   v = W.values[row_ptr + s];
             const float* x_row = X + static_cast<int64_t>(c) * N;
 
-            // Inner j loop — this is what NEON will vectorize in 3d.
+            // Inner j loop — this is what NEON vectorizes in spmm_neon.cpp.
             // Plain scalar FMA: y[j] += v * x[j].
             for (int64_t j = 0; j < N; ++j) {
                 y_row[j] += v * x_row[j];
