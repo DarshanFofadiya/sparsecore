@@ -27,6 +27,7 @@
 #include "kernels/spmm.hpp"
 #include "kernels/spmm_neon.hpp"
 #include "kernels/spmm_grad.hpp"
+#include "kernels/dense_grad.hpp"
 
 namespace py = pybind11;
 
@@ -321,6 +322,61 @@ py::array_t<float> py_spmm_grad_w(
 
 
 // ─────────────────────────────────────────────────────────────────────────
+//  py_dense_grad — bindings shim for the full-dense gradient kernel.
+//
+//  G = dY @ X^T, used by RigL (milestone 4f) to find positions the
+//  task *wants* connections at, including currently-dead ones.
+//
+//  Unlike py_spmm_grad_w, this does NOT consult a PaddedCSR — it
+//  produces the full (M, K) dense matrix regardless of which positions
+//  are currently live. The Python side uses live-mask info afterward
+//  to pick top-K among the currently-dead positions.
+// ─────────────────────────────────────────────────────────────────────────
+py::array_t<float> py_dense_grad(
+    py::array_t<float, py::array::c_style | py::array::forcecast> dY,
+    py::array_t<float, py::array::c_style | py::array::forcecast> X
+) {
+    py::buffer_info dy_info = dY.request();
+    py::buffer_info x_info = X.request();
+
+    if (dy_info.ndim != 2) {
+        throw std::invalid_argument(
+            "dense_grad: dY must be 2-D, got ndim=" +
+            std::to_string(dy_info.ndim) + ".");
+    }
+    if (x_info.ndim != 2) {
+        throw std::invalid_argument(
+            "dense_grad: X must be 2-D, got ndim=" +
+            std::to_string(x_info.ndim) + ".");
+    }
+
+    const int64_t M = dy_info.shape[0];
+    const int64_t N_dy = dy_info.shape[1];
+    const int64_t K = x_info.shape[0];
+    const int64_t N_x = x_info.shape[1];
+
+    if (N_dy != N_x) {
+        throw std::invalid_argument(
+            "dense_grad: dY.shape[1]=" + std::to_string(N_dy) +
+            " must equal X.shape[1]=" + std::to_string(N_x) +
+            " (shared inner dim N).");
+    }
+
+    // Allocate the output (M, K) float32 array.
+    auto G = py::array_t<float>({M, K});
+    py::buffer_info g_info = G.request();
+
+    const float* dY_ptr = static_cast<const float*>(dy_info.ptr);
+    const float* X_ptr = static_cast<const float*>(x_info.ptr);
+    float* G_ptr = static_cast<float*>(g_info.ptr);
+
+    sparsecore::dense_grad(M, K, N_dy, dY_ptr, X_ptr, G_ptr);
+
+    return G;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
 //  Module registration.
 //  The first argument (_core) must match the name in setup.py's
 //  Pybind11Extension ("sparsecore._core" → everything after the dot).
@@ -357,6 +413,13 @@ PYBIND11_MODULE(_core, m) {
           "(M, N) and forward input X (K, N), returns a 1-D float32 array "
           "of length W.nnz() aligned with W.values. The dense-simulated "
           "anti-pattern materializes a full (M, K) gradient; we do not.");
+
+    m.def("dense_grad", &py_dense_grad,
+          "Compute the FULL dense gradient G = dY @ X^T. Shape (M, K) "
+          "where M = dY.shape[0], K = X.shape[0]. Used by RigL to find "
+          "top-K grow candidates including currently-dead positions. "
+          "This IS the dense-simulated gradient — but RigL uses it only "
+          "at update events (every ~100 steps), not every batch.");
 
     // ═════════════════════════════════════════════════════════════════════
     //  PaddedCSR — sparse matrix storage with padded rows for O(1) insert.

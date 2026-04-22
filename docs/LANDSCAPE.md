@@ -178,3 +178,38 @@ the narrow model) plus a few lines of demo code. Deferred for now so
 we can focus on shipping `SparseLinear` (milestone 4b) and OpenMP
 parallelization (milestone 4c). Tracked as a follow-up; will get its
 own demo when it lands.
+
+### Adaptive-sparsity DST (no fixed nnz budget)
+
+RigL and SET both hold `nnz` constant — the total number of live
+connections per layer never changes. That's a modeling choice, not
+a truth. Different layers probably want different sparsity levels
+(attention heads might want 50% sparsity; FFN blocks might want 95%).
+A fixed-budget approach can't discover this.
+
+A natural SparseCore-native variant: at each update, drop
+low-magnitude weights as usual, but **grow every position where
+|dL/dW| exceeds a learned or scheduled threshold**, rather than a
+fixed top-K. Let `nnz` drift up when the loss landscape asks for
+more connections, down when existing ones are wasted.
+
+Two ways to parameterize this, both viable plugins of our Router API:
+
+- **Threshold-driven:** grow wherever |G| > τ, where τ is scheduled
+  or learned.
+- **Regularizer-driven:** add a small L1 penalty on the weight values
+  that pushes the optimizer to naturally zero-out unused connections;
+  grow at top-|G| positions. The L1 penalty and RigL's grow criterion
+  combine into self-balancing sparsity.
+
+Neither is in the DST literature under our exact formulation — there
+are adjacent ideas (SWAT, movement pruning) but none map cleanly
+onto the "pluggable DST algorithm" shape.
+
+This is exactly the kind of v0.2+ experiment our Router API is
+designed to serve: a researcher implements it as a ~100-line
+`SparsityAlgorithm` subclass without touching kernels. Great
+candidate for the first community contribution after launch.
+
+Estimated cost: ~1 day to prototype, maybe a week to tune. Out of
+scope for v0.1 but tracked so it doesn't slip.

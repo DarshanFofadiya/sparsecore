@@ -471,3 +471,256 @@ class SET(DynamicSparsityAlgorithm):
         # After topology change, the _values torch Parameter is still
         # aliased to csr.values numpy view, so in-place writes above
         # are automatically visible to the optimizer at the next step.
+
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  RigL — Rigging the Lottery
+# ─────────────────────────────────────────────────────────────────────
+
+class RigL(DynamicSparsityAlgorithm):
+    """
+    Rigging the Lottery (Evci et al., 2020,
+    https://arxiv.org/abs/1911.11134).
+
+    The smarter cousin of SET. Same drop criterion (smallest-magnitude
+    live weights), but a smarter grow criterion: instead of random empty
+    positions, grow at positions where the *dense gradient* |dL/dW| is
+    largest — i.e., positions the loss would start training toward
+    immediately if the connection existed.
+
+    Why it works: `dL/dW[i, k]` at a currently-dead position `(i, k)`
+    says "if you added this connection, this is the force that would
+    act on it." Large magnitude → the task wants this connection.
+    So we grow there. The random-regrow of SET is like buying lottery
+    tickets at random; RigL reads the answer key first.
+
+    On short training budgets (where SET often ties or loses to
+    Static), RigL's information advantage shows up immediately — the
+    paper shows a measurable accuracy improvement within the first
+    ~10 epochs on CIFAR.
+
+    Args:
+        sparsity:      target sparsity in ``[0, 1)``.
+        drop_fraction: fraction of live connections to churn per update.
+                       Paper default: 0.3.
+        update_freq:   steps between updates. Paper default: 100.
+        seed:          optional RNG seed for reproducibility (in case
+                       of ties in the top-K selection).
+
+    Implementation detail: RigL needs the forward-pass input `X` and
+    the backward-pass upstream gradient `dY` for each layer, at the
+    most recent training step before `update()` fires. We capture
+    these via hooks registered when the layer is attached — a
+    forward hook to stash `X`, and a full backward hook to stash
+    `dY`. These are consumed and cleared at every `update()`.
+
+    Example:
+        >>> layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+        >>> algo = sparsecore.RigL(sparsity=0.9, drop_fraction=0.3,
+        ...                          update_freq=100, seed=42)
+        >>> layer.apply(algo)
+        >>> # training loop
+        >>> #   opt.step(); algo.step()
+    """
+
+    def __init__(
+        self,
+        sparsity: float,
+        drop_fraction: float = 0.3,
+        update_freq: int = 100,
+        seed: int | None = None,
+    ):
+        super().__init__(
+            sparsity=sparsity,
+            drop_fraction=drop_fraction,
+            update_freq=update_freq,
+        )
+        import numpy as np
+        self._rng = np.random.default_rng(seed)
+        # Per-layer captured state: maps layer id → captured tensors.
+        # Populated by the forward/backward hooks on each training step;
+        # read by update() and then cleared.
+        self._captured: dict[int, dict] = {}
+        # Handles to the hooks so we can remove them if needed.
+        self._hook_handles: list = []
+
+    # ─── Hook installation ─────────────────────────────────────────
+
+    def attach(self, layer) -> None:
+        """Override attach to additionally install forward/backward hooks
+        that capture X (input) and dY (upstream gradient) at each
+        training step."""
+        super().attach(layer)
+
+        # Forward hook: captures the input X.
+        #
+        # PyTorch passes (module, input_tuple, output) to forward hooks.
+        # Our SparseLinear.forward takes a single positional arg.
+        def _fwd_hook(mod, inputs, output):
+            # inputs is a tuple; inputs[0] is the raw input tensor (N, H_in).
+            # We stash a detached copy so autograd doesn't hold a ref.
+            # The final forward of the layer operates on (H_in, N) after
+            # a transpose inside forward(); we stash the USER-FACING (N, H_in)
+            # shape and transpose inside update().
+            self._captured.setdefault(id(mod), {})["X"] = inputs[0].detach().clone()
+
+        # Full backward hook: captures the gradient w.r.t. the OUTPUT of the layer.
+        #
+        # PyTorch's signature: (module, grad_input, grad_output).
+        # grad_output is a tuple with one entry for each output tensor;
+        # for our layer it's a single (N, H_out) gradient. We stash it.
+        def _bwd_hook(mod, grad_input, grad_output):
+            dY = grad_output[0]
+            if dY is not None:
+                self._captured.setdefault(id(mod), {})["dY"] = dY.detach().clone()
+
+        self._hook_handles.append(layer.register_forward_hook(_fwd_hook))
+        self._hook_handles.append(layer.register_full_backward_hook(_bwd_hook))
+
+    # ─── Update ────────────────────────────────────────────────────
+
+    def update(self) -> None:
+        """Drop smallest-magnitude weights, grow at highest-gradient
+        empty positions."""
+        for layer in self.layers:
+            self._update_layer(layer, self._rng)
+
+    def _update_layer(self, layer, rng) -> None:
+        """Mutate one layer's topology using the captured gradient info."""
+        import numpy as np
+        import torch
+        from sparsecore import _core
+
+        # ── Retrieve captured X and dY from the hooks.
+        captured = self._captured.get(id(layer))
+        if captured is None or "X" not in captured or "dY" not in captured:
+            # No forward/backward has run since attach — can't update.
+            # This can happen if update_freq is reached before any training
+            # step. Just skip this cycle.
+            return
+
+        # Shapes:
+        #   X:  (N, H_in)  — user-facing forward input shape
+        #   dY: (N, H_out) — gradient w.r.t. layer output
+        # For our dense_grad kernel we need:
+        #   dY': (H_out=M, N) — transpose
+        #   X':  (H_in =K, N) — transpose
+        X_user = captured["X"]      # (N, H_in)
+        dY_user = captured["dY"]    # (N, H_out)
+
+        # Flatten leading batch dims the same way forward() does.
+        X_flat = X_user.reshape(-1, layer.in_features).contiguous()
+        dY_flat = dY_user.reshape(-1, layer.out_features).contiguous()
+
+        # Transpose to (H_out, N) and (H_in, N).
+        dY_np = dY_flat.t().contiguous().numpy()
+        X_np = X_flat.t().contiguous().numpy()
+
+        # ── Compute the full dense gradient G = dY @ X^T, shape (M, K).
+        # M = layer.out_features (= csr.nrows)
+        # K = layer.in_features  (= csr.ncols)
+        G = _core.dense_grad(dY_np, X_np)   # shape (M, K)
+        abs_G = np.abs(G)
+
+        # ── Drop: same as SET, global magnitude threshold.
+        csr = layer._csr
+        col_indices = np.asarray(csr.col_indices)
+        values_np   = np.asarray(csr.values)
+        row_start   = np.asarray(csr.row_start)
+        row_nnz     = np.asarray(csr.row_nnz)
+        ncols       = csr.ncols
+        total_nnz   = int(csr.nnz)
+
+        if total_nnz == 0:
+            self._captured.pop(id(layer), None)
+            return
+
+        # Collect all live |values| to find the drop threshold.
+        all_live_vals = np.empty(total_nnz, dtype=np.float32)
+        cursor = 0
+        for i in range(csr.nrows):
+            n = int(row_nnz[i])
+            if n == 0:
+                continue
+            start = int(row_start[i])
+            all_live_vals[cursor:cursor + n] = values_np[start:start + n]
+            cursor += n
+
+        abs_vals = np.abs(all_live_vals)
+        k_drop = max(1, int(self.drop_fraction * total_nnz))
+        threshold = np.partition(abs_vals, k_drop - 1)[k_drop - 1]
+
+        # ── Per-row: drop low-magnitude, grow at top-|G| empty positions.
+        for i in range(csr.nrows):
+            start = int(row_start[i])
+            n_live = int(row_nnz[i])
+            if n_live == 0:
+                continue
+
+            live_cols = col_indices[start : start + n_live]
+            live_vals = values_np[start : start + n_live]
+
+            # Keep slots strictly above the drop threshold.
+            keep_mask = np.abs(live_vals) > threshold
+            n_keep = int(keep_mask.sum())
+
+            # Don't produce empty rows.
+            if n_keep == 0 and n_live > 0:
+                best_idx = int(np.argmax(np.abs(live_vals)))
+                keep_mask[best_idx] = True
+                n_keep = 1
+
+            survivor_cols = live_cols[keep_mask]
+            survivor_vals = live_vals[keep_mask]
+            n_drop = n_live - n_keep
+
+            if n_drop == 0:
+                # No drops in this row → no grows needed.
+                order = np.argsort(survivor_cols, kind="stable")
+                csr.rewrite_row(
+                    i,
+                    survivor_cols[order].astype(np.int32),
+                    survivor_vals[order].astype(np.float32),
+                )
+                continue
+
+            # ── NEW vs SET: grow at top-|G| empty positions.
+            # Mask out currently-live cols so we only consider empties.
+            row_grad_abs = abs_G[i, :].copy()   # length ncols
+            row_grad_abs[survivor_cols] = -np.inf  # exclude live
+
+            # Pick the top n_drop grow candidates.
+            # argpartition gets us the top-n without full sort.
+            available = int((row_grad_abs > -np.inf).sum())
+            n_grow = min(n_drop, available)
+            if n_grow == 0:
+                # Row is fully dense after drops — can't grow.
+                order = np.argsort(survivor_cols, kind="stable")
+                csr.rewrite_row(
+                    i,
+                    survivor_cols[order].astype(np.int32),
+                    survivor_vals[order].astype(np.float32),
+                )
+                continue
+
+            # argpartition returns an unsorted partition; the first n_grow
+            # elements contain the top n_grow values (not sorted among
+            # themselves, but each >= all elements after position n_grow).
+            # Negate abs_G so "top K largest" becomes "top K smallest of
+            # the negation", which is what argpartition[:n_grow] gives us.
+            top_indices = np.argpartition(-row_grad_abs, n_grow - 1)[:n_grow]
+            grow_cols = top_indices.astype(np.int32)
+            grow_vals = np.zeros(n_grow, dtype=np.float32)  # RigL: zero-init
+
+            # Merge survivors + grown, sort by column.
+            merged_cols_unsorted = np.concatenate([survivor_cols, grow_cols])
+            merged_vals_unsorted = np.concatenate([survivor_vals, grow_vals])
+            order = np.argsort(merged_cols_unsorted, kind="stable")
+            merged_cols = merged_cols_unsorted[order].astype(np.int32)
+            merged_vals = merged_vals_unsorted[order].astype(np.float32)
+
+            csr.rewrite_row(i, merged_cols, merged_vals)
+
+        # Free captured state so we don't hold a reference to stale tensors.
+        self._captured.pop(id(layer), None)

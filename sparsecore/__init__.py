@@ -36,7 +36,13 @@ from sparsecore._core import PaddedCSR as _PaddedCSRCpp
 from sparsecore import layout as _layout
 from sparsecore.ops import spmm
 from sparsecore.nn import SparseLinear
-from sparsecore.router import SparsityAlgorithm, Static, DynamicSparsityAlgorithm, SET
+from sparsecore.router import (
+    SparsityAlgorithm,
+    Static,
+    DynamicSparsityAlgorithm,
+    SET,
+    RigL,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -66,5 +72,6 @@ __all__ = [
     "DynamicSparsityAlgorithm",
     "Static",
     "SET",
+    "RigL",
 ]
 __version__ = "0.0.1"

@@ -202,6 +202,7 @@ ext_modules = [
             "csrc/kernels/spmm.cpp",
             "csrc/kernels/spmm_neon.cpp",
             "csrc/kernels/spmm_grad.cpp",
+            "csrc/kernels/dense_grad.cpp",
         ],
         # Include paths used for `#include "kernels/foo.hpp"` etc.
         # OpenMP includes are appended by configure_openmp() above.
