@@ -2,28 +2,62 @@
 
 ## Why SparseCore Exists
 
-> Current dynamic sparse training (DST) research forces a false choice: either use dense-simulated masks (wasting massive compute and memory) or spend six months writing custom C++ kernels. SparseCore is the first actually-sparse, PyTorch-native training framework built for the researcher. It provides a Pluggable Router API so you can implement any DST algorithm (RigL, SET, Condensed) in pure Python, backed by a native Padded-CSR C++ engine. Optimized heavily for Apple Silicon, SparseCore allows you to aggressively prototype and mutate billion-parameter sparse topologies locally on your MacBook before scaling to the GPU cluster.
+Current dynamic sparse training (DST) research forces a painful
+tradeoff: either use dense-simulated masks (wasting compute and memory
+on weights that are supposed to be zero) or spend weeks writing custom
+C++ kernels. SparseCore is a **PyTorch-native, actually-sparse DST
+library** built for researchers in this space.
 
-This is our elevator pitch, our README headline, and our guiding narrative. Every design choice ladders up to it.
+The concrete offer:
 
-*For the full audit of existing projects and where we fit, see `LANDSCAPE.md`.*
+- Write any DST algorithm (RigL, SET, Condensed, a new one you're
+  inventing) as a ~50-line Python subclass of `SparsityAlgorithm`.
+- Hand it a `SparseLinear(nn.Module)` and it plugs into standard
+  PyTorch — real `nn.Parameter`s, real `torch.optim`, real
+  `state_dict`.
+- Under the hood, weights are stored as Padded-CSR and forward/backward
+  go through NEON + OpenMP kernels. Not mask-on-dense simulation.
+
+This is an *actually sparse training library*, not a dense training
+library that pretends to be sparse. We are CPU-first and
+Apple-Silicon-first so the iteration loop stays on a researcher's
+laptop instead of a rented GPU.
+
+*For the full audit of the existing ecosystem and where we fit, see
+`LANDSCAPE.md`.*
 
 ---
 
-## 1. The Target Application: "Tiny but Credible" Transformer
+## 1. The Target Application: Tiny-but-Credible Transformer
 
-SparseCore is built to train Transformers from scratch using dynamic sparsity on commodity hardware.
+SparseCore is built to train Transformers from scratch using dynamic
+sparsity on commodity hardware.
 
-- **v0.1 Goal:** Train a 2-layer, 128-hidden decoder-only Transformer on a character-level language modeling task.
-- **Scope Definition:** We sparsify the **Weights** (linear projections, FFN), NOT the Attention mechanism. Attention remains dense for v0.1.
-- **Success Criterion:** The demo transformer trains from scratch to reasonable loss at ≥90% unstructured weight sparsity on a MacBook CPU, end-to-end, with dynamic topology mutation during training.
+- **v0.1 target:** 10M-parameter character-level decoder-only
+  transformer (6 layers, `d_model=384`, `d_ff=1536`) trained on
+  Tiny-Shakespeare at 90% FFN sparsity. Runs on a MacBook.
+- **Scope:** We sparsify the **weight matrices** (linear projections,
+  FFN). Attention stays dense in v0.1 — we proved sparse attention
+  works (see `demos/demo_14_sparse_attention.py`) but didn't promote
+  it to a first-class API.
+- **Success criterion (v0.1):** Loss curves track dense training
+  within expected tolerances; topology mutation via SET/RigL works
+  end-to-end; 369-test suite passes; all demos run.
 
-## 2. The Hardware Target: Apple Silicon (NEON)
+Larger-scale training (100M+ parameters, distributed, GPU) is
+explicitly out of scope for v0.1 and lives on the v0.2/v0.3 roadmap.
 
-- **Processor:** ARM64 (Apple M-series).
-- **SIMD:** 128-bit NEON intrinsics (`<arm_neon.h>`), 4 `float32` elements per lane.
-- **No x86 emulation.** Rosetta would defeat the entire point. x86/AVX kernels are an explicit v0.2+ contribution opportunity, gated behind `#ifdef __x86_64__`.
-- **Threading:** OpenMP across the 6 performance cores of Apple Silicon.
+## 2. The Hardware Target: CPU, Apple-Silicon-First
+
+- **Primary:** ARM64 (Apple M-series) with 128-bit NEON, OpenMP
+  parallelism across the performance cores.
+- **Secondary:** x86_64 Linux (scalar kernels + OpenMP — still fast,
+  no NEON). AVX-512 kernels are a good v0.2 community contribution.
+- **ARM Linux (Graviton, Raspberry Pi 5, Ampere):** same NEON path
+  as macOS. Wheels ship for Linux aarch64.
+- **Not supported in v0.1:** Windows (planned for v0.2 via clang-cl),
+  GPU (a v0.3+ contribution opportunity), distributed training
+  (v0.3).
 
 ## 3. The API Strategy: The Middle Path
 
@@ -44,56 +78,121 @@ Standard CSR is fast to read but brittle under mutation — inserting a new nonz
 This is the product researchers interact with.
 
 ```python
-class Router(ABC):
-    def pick_to_drop(self, weights: PaddedCSR) -> list[Index]: ...
-    def pick_to_grow(self, weights: PaddedCSR, grads: PaddedCSR) -> list[Index]: ...
+class SparsityAlgorithm:
+    def __init__(self, sparsity: float): ...
+    def step(self): ...            # called per training step
+    def update(self): ...          # override to mutate topology
 ```
 
-Any DST algorithm (RigL, SET, Sparse Momentum, future papers) becomes a ~100-line Python subclass. The C++ engine doesn't know or care which algorithm is running. This is the scaffolding we give the community.
+Any DST algorithm (RigL, SET, Sparse Momentum, future papers) becomes
+a ~50-line Python subclass with docs and ~200 lines total. The C++
+engine doesn't know which algorithm is running. This is the
+scaffolding we offer the community.
 
 v0.1 ships with:
-- `SETRouter` (random growth — fast, no dense math, most training-stable)
-- `MagnitudeRouter` (pruning only, no growth — for debugging and baseline comparisons)
+- `Static` (reference implementation: random mask at init, never changes)
+- `SET` (Sparse Evolutionary Training — magnitude-based drop, random regrow)
+- `RigL` (Rigging the Lottery — magnitude-based drop, gradient-based regrow)
 
-RigL (gradient-based growth with periodic dense stalls) is v0.2.
+## 6. Execution Status (milestones delivered in v0.1)
 
-## 6. Execution Roadmap
+**Phase 1 — PyTorch bridge.** CMake/setup.py + pybind11 + trivial C++
+function callable from Python. Delivered; `demo_01_bridge.py`.
 
-**Phase 1 — PyTorch Trojan Horse (scaffolding).** CMake/setup.py + pybind11 + a trivial C++ function callable from Python. Proves the bridge works.
+**Phase 2 — Dense NEON warmup.** Scalar matmul → SIMD matmul with NEON
+intrinsics. Oracle-verified against `torch.matmul`. Delivered;
+`demo_02_dot.py`.
 
-**Phase 2 — Dense Baseline & NEON Warmup.** Naive C++ dense matmul → SIMD matmul with NEON intrinsics. Oracle-verified against `torch.matmul`.
+**Phase 3 — Static sparse inference.** Padded-CSR struct, PyTorch ↔
+Padded-CSR round-trip, SIMD SpMM forward. Oracle-verified. Delivered;
+`demo_03_spmm.py`.
 
-**Phase 3 — Static Sparse Inference.** Padded-CSR struct. PyTorch → Padded-CSR converter. SIMD SpMM forward pass. Oracle-verified.
-
-**Phase 4 — Dynamic Sparse Training.** Sparse backward pass. Router API. Topology mutation mid-training. End-to-end transformer demo.
+**Phase 4 — Dynamic sparse training.** Sparse backward pass, autograd
+integration, `SparseLinear` nn.Module, pluggable `SparsityAlgorithm`
+API, SET, RigL, end-to-end transformer training. Delivered;
+`demo_04_autograd.py` through `demo_15_mini_gpt.py`.
 
 ## 7. Definition of Done for v0.1
 
-The project ships to the community when:
-1. A standard PyTorch `nn.Module` can swap `nn.Linear` → `sparsecore.SparseLinear` with zero other changes.
-2. A 2-layer transformer trains end-to-end on a character-level task at ≥90% sparsity.
-3. SET and Magnitude routers both work as pluggable classes.
-4. All kernels pass the Oracle suite at 1e-5 tolerance.
-5. Sparse SpMM measurably outperforms dense `torch.matmul` at ≥90% sparsity on M-series hardware.
-6. README, LANDSCAPE, and example notebooks are polished enough that a grad student can follow them start-to-finish.
+The project ships to the community when all of these are true:
 
-## 8. Planned Directory Layout
+1. A standard PyTorch `nn.Module` can swap `nn.Linear` →
+   `sparsecore.SparseLinear` with a one-keyword change.
+2. A 10M-param decoder-only transformer trains end-to-end on a
+   character-level task at 90% FFN sparsity, tracking the dense
+   baseline's loss curve within reasonable tolerance.
+3. `Static`, `SET`, `RigL` all work as `SparsityAlgorithm` subclasses.
+4. Kernels pass the Oracle suite at 1e-5 tolerance (372 tests today).
+5. `pip install sparsecore` works on macOS arm64, macOS x86_64,
+   Linux x86_64, Linux aarch64 — wheels published to PyPI with
+   libomp bundled inside.
+6. README, LANDSCAPE, and demo writeups are polished enough that a
+   grad student can follow them start-to-finish.
+
+Not part of v0.1 DoD (and called out as such):
+- Faster than `torch.matmul` on CPU. (We are not — the pitch is
+  memory and pluggability, not raw speed. See README "honest
+  performance picture.")
+- Windows support. (Planned v0.2.)
+- GPU backend. (v0.3+ contribution opportunity.)
+- Distributed training. (v0.3.)
+
+## 8. Directory Layout (as shipped)
 
 ```
-SparseCore/
-├── docs/                       # PROJECT_OVERVIEW, LANDSCAPE, SYSTEM_PROMPT
-├── csrc/                       # C++ kernels + pybind11 glue
-│   ├── padded_csr.hpp
-│   ├── spmm_neon.cpp
-│   └── bindings.cpp
-├── sparsecore/                 # Python package
-│   ├── __init__.py
-│   ├── layers.py               # SparseLinear
-│   ├── routers.py              # SETRouter, MagnitudeRouter
-│   └── trainer.py              # DST training loop helpers
-├── tests/                      # Oracle tests (pytest)
-├── examples/                   # Transformer demo notebook
+sparsecore/
+├── docs/
+│   ├── PROJECT_OVERVIEW.md         # this file
+│   ├── LANDSCAPE.md                # ecosystem audit
+│   ├── SYSTEM_PROMPT.md            # working conventions
+│   ├── design/                     # design docs written before the code
+│   │   ├── padded_csr.md
+│   │   ├── spmm.md
+│   │   ├── spmm_backward.md
+│   │   ├── sparse_linear.md
+│   │   ├── router.md
+│   │   ├── rigl.md
+│   │   └── tiny_transformer.md
+│   └── demos/                      # per-milestone writeups + screenshots
+│       ├── milestone_01.md         ... milestone_10.md
+│       └── demo_*.png / .txt artifacts
+├── csrc/                           # C++ kernels and pybind11 glue
+│   ├── bindings.cpp
+│   └── kernels/
+│       ├── padded_csr.{hpp,cpp}
+│       ├── spmm.{hpp,cpp}          # scalar reference SpMM
+│       ├── spmm_neon.{hpp,cpp}     # NEON-vectorized SpMM
+│       ├── spmm_grad.{hpp,cpp}     # dW kernel
+│       ├── dense_grad.{hpp,cpp}    # RigL's dense-grad stall kernel
+│       ├── vector_dot{_neon}.{hpp,cpp}
+│       └── parallel.hpp            # OpenMP shim
+├── sparsecore/                     # Python package
+│   ├── __init__.py                 # attaches Python factories to C++ class
+│   ├── layout.py                   # PaddedCSR factories + transpose
+│   ├── ops.py                      # spmm + autograd Function
+│   ├── nn.py                       # SparseLinear
+│   └── router.py                   # SparsityAlgorithm base + Static/SET/RigL
+├── tests/                          # 369 Oracle tests (pytest)
+├── examples/                       # 15 runnable demos
+├── .github/workflows/              # cibuildwheel CI for PyPI wheels
 ├── environment.yml
+├── pyproject.toml
 ├── setup.py
 └── README.md
 ```
+
+## 9. What's next after v0.1
+
+See the v0.2/v0.3 roadmap in the README for the full list. Highest-
+priority items:
+
+- **dW kernel optimization.** At FFN-mid scale, `dW` is 62% of a
+  training step. A NEON-vectorized dW is measured at ~1.3–1.5×
+  end-to-end speedup and is the headline v0.2 item.
+- **Windows native wheels** (v0.2). Removes the WSL2 workaround.
+- **PyTorch DDP compatibility** (v0.3). The plumbing mostly works;
+  needs end-to-end validation and a multi-node demo.
+- **Sparse attention as a first-class primitive.** We proved it
+  works at 70% attention sparsity + 90% FFN sparsity in
+  `demo_14_sparse_attention.py`; v0.2 or v0.3 promotes the pattern
+  to a documented API.

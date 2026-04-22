@@ -102,16 +102,16 @@ Reading the landscape honestly:
 - **"First sparse-from-scratch training library"** — ❌ False. rigl-torch, Tim Dettmers' sparse_learning, and several research repos predate us.
 - **"First CPU sparse training engine"** — ⚠️ Partial. Neural Magic owned CPU sparse for years (inference); nobody has productionized CPU sparse *training*.
 - **"First drop-in `nn.Linear` replacement"** — ❌ False. HuggingFace did it in 2020 (block-structured).
-- **"First actually-sparse, unstructured, training-from-scratch, CPU-native engine with a pluggable router interface for DST algorithms"** — ✅ True, and this is what we are.
+- **"First actually-sparse, unstructured, training-from-scratch, CPU-native engine with a pluggable router interface for DST algorithms"** — this is the specific corner we're claiming. We're not aware of an equivalent library at launch, but we'd welcome being corrected via a GitHub issue — keeping this catalog honest is part of the community hygiene we're trying to model.
 
 **The real opening we're filling:** Sparse-from-scratch is an active 2024-2025 research area with a dozen published methods but no canonical, production-quality, hackable library that researchers default to. Every paper reinvents the DST scaffolding. The community is starving for a clean "PyTorch for sparse training" that all these methods can plug into.
 
 ## Our Moats (what makes us actually work)
 
 1. **Padded-CSR data layout** — O(1) insertion of grown connections during training. Standard CSR can't do this.
-2. **Native Apple Silicon NEON kernels** — Nobody else has sparse training kernels for Apple Silicon. Researchers prototype on MacBooks; we make that fast.
-3. **Pluggable Router API** — RigL, SET, Sparse Momentum, and future papers express as ~100-line Python classes. No C++ contributions required from users.
-4. **True sparse (not mask-simulated)** — We don't compute dense gradients and mask them. We compute only what's needed. This is the actual FLOP saving everyone else promises.
+2. **Native Apple Silicon NEON kernels** — the best-tuned sparse training kernels for Apple Silicon we're aware of. Researchers prototype on MacBooks; we make that fast.
+3. **Pluggable `SparsityAlgorithm` API** — RigL, SET, Sparse Momentum, and future papers can be expressed as short Python subclasses (typically ~50 lines of real logic, ~200 with docs). No C++ contributions required from users.
+4. **True sparse storage** — we don't compute dense gradients and mask them. We compute only what's needed. This is the actual FLOP and memory saving; the dense+mask approach that works on wafer-scale chips is actively the wrong choice on CPU.
 
 ## SparseCore vs Cerebras — The One Table
 
@@ -132,9 +132,16 @@ The most useful comparison for readers already familiar with Cerebras:
 
 ## Why a Researcher in 2026 Chooses SparseCore
 
-> Current dynamic sparse training (DST) research forces a false choice: either use dense-simulated masks (wasting massive compute and memory) or spend six months writing custom C++ kernels. SparseCore is the first actually-sparse, PyTorch-native training framework built for the researcher. It provides a Pluggable Router API so you can implement any DST algorithm (RigL, SET, Condensed) in pure Python, backed by a native Padded-CSR C++ engine. Optimized heavily for Apple Silicon, SparseCore allows you to aggressively prototype and mutate billion-parameter sparse topologies locally on your MacBook before scaling to the GPU cluster.
+SparseCore is a PyTorch-native, actually-sparse DST library. Write
+your next drop/grow rule as a short `SparsityAlgorithm` subclass;
+it runs against real Padded-CSR storage and real sparse kernels, not
+a mask-on-dense simulation. Built CPU-first and Apple-Silicon-first,
+so the iteration loop stays on your laptop instead of a rented GPU.
 
-This is our elevator pitch. It goes in the README. It's the answer to every "why not just use X" question.
+It's not faster than dense on CPU — honest about that in the README.
+The value is **memory footprint** (~18% of dense at 90% sparsity),
+**pluggability** (no need to reinvent the DST scaffolding for each new
+algorithm), and **accessibility** (no GPU required to prototype).
 
 ---
 
