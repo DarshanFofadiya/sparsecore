@@ -51,3 +51,16 @@ env/
 # Demos auto-download MNIST (and future datasets) on first run. Never
 # commit the actual bytes — they're regenerated on demand.
 data/
+
+# ─── Training logs ───────────────────────────────────────────────────────
+# Long training runs pipe stdout/stderr to logs/. These are big and
+# specific to one run — not committed. Summary tables and plots go
+# into docs/demos/ instead.
+logs/
+
+# ─── cibuildwheel / PyPI publish artifacts ──────────────────────────────
+# cibuildwheel dumps built wheels into wheelhouse/. Individual wheels are
+# up to 10MB and specific to (os, arch, python) so they don't belong in
+# the repo — CI uploads them to PyPI directly.
+wheelhouse/
+*.whl
