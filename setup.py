@@ -103,35 +103,59 @@ def configure_openmp() -> tuple[list[str], list[str], list[str]]:
                 break
 
         if include_path is None:
-            print(
-                "sparsecore: libomp headers not found at standard Homebrew "
-                "paths; building WITHOUT OpenMP. Install with "
-                "`brew install libomp` or set SPARSECORE_LIBOMP_PREFIX.",
-                file=sys.stderr,
+            msg = (
+                "\n"
+                "══════════════════════════════════════════════════════════════════\n"
+                "  sparsecore: libomp NOT FOUND — building WITHOUT OpenMP.\n"
+                "  The kernels will run SEQUENTIALLY (roughly 4-6x slower\n"
+                "  on an Apple Silicon Mac with >=4 cores).\n"
+                "\n"
+                "  To get parallel kernels, install libomp:\n"
+                "    macOS:  brew install libomp\n"
+                "    Linux:  (already bundled with gcc/clang)\n"
+                "\n"
+                "  Then rebuild:\n"
+                "    pip install -e . --no-build-isolation --no-deps --force-reinstall\n"
+                "\n"
+                "  To silence this warning intentionally, set:\n"
+                "    SPARSECORE_NO_OPENMP=1\n"
+                "══════════════════════════════════════════════════════════════════\n"
             )
+            print(msg, file=sys.stderr)
             return [], [], []
 
         # Link strategy: prefer PyTorch's bundled libomp if we can find
         # it, otherwise Homebrew's. Using `-rpath` tells the macOS
         # dynamic loader where to search at runtime.
-        link_args = ["-lomp"]
+        #
+        # We always add Homebrew's libomp prefix as a FALLBACK rpath
+        # too. That way, if a user somehow imports sparsecore without
+        # torch first (unusual — sparsecore always imports torch in
+        # its __init__), the dynamic loader still finds a libomp.
+        hb_prefix = os.path.dirname(os.path.dirname(include_path))
+        hb_lib = os.path.join(hb_prefix, "lib")
+
+        link_args: list[str] = []
         try:
             import torch  # type: ignore
             torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
             if os.path.isfile(os.path.join(torch_lib, "libomp.dylib")):
-                # Search torch/lib FIRST so we resolve to its libomp,
-                # matching whichever OpenMP runtime torch already loaded.
+                # Search torch/lib FIRST so we resolve to the same libomp
+                # torch itself loaded. Homebrew's libomp is the fallback.
                 link_args = [
                     "-L" + torch_lib,
                     "-Wl,-rpath," + torch_lib,
+                    "-Wl,-rpath," + hb_lib,
                     "-lomp",
                 ]
         except ImportError:
-            # Fallback: use Homebrew's libomp.
-            hb_prefix = os.path.dirname(os.path.dirname(include_path))
+            pass
+
+        if not link_args:
+            # No torch at build time: just use Homebrew's libomp.
             link_args = [
-                "-L" + os.path.join(hb_prefix, "lib"),
-                "-Wl,-rpath," + os.path.join(hb_prefix, "lib"),
+                "-L" + hb_lib,
+                "-Wl,-rpath," + hb_lib,
                 "-lomp",
             ]
 

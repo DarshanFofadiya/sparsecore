@@ -8,6 +8,16 @@
 #     conda env create -f environment.yml
 #     conda activate sparsecore
 #
+# Pre-requisites NOT managed by this file:
+#
+#   On macOS, OpenMP parallel kernels require libomp from Homebrew:
+#       brew install libomp
+#   If libomp is missing, setup.py falls back to a sequential build
+#   (correct but ~5x slower on MLPs). The build emits a warning you
+#   will not want to see.
+#
+#   On Linux, OpenMP ships with gcc/clang and no extra install is needed.
+#
 # Design choices (see docs/SYSTEM_PROMPT.md section 2a for rationale):
 #
 #   - Python 3.11: PyTorch's most stable Apple Silicon target as of 2025.

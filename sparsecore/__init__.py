@@ -22,6 +22,14 @@ span two implementation languages.
 See docs/PROJECT_OVERVIEW.md for the full mission and roadmap.
 """
 
+# Import torch FIRST so its bundled libomp.dylib is pre-loaded into the
+# process. Our C++ extension was linked against torch/lib/libomp.dylib
+# via rpath at build time; that rpath only resolves if torch is already
+# in the process, OR if libomp happens to be on the system at a known
+# path. Since SparseCore is a PyTorch extension anyway (every public
+# API returns torch.Tensor), this is a free pre-condition to establish.
+import torch as _torch  # noqa: F401  (imported for side effect)
+
 from sparsecore._core import PaddedCSR as _PaddedCSRCpp
 from sparsecore import layout as _layout
 from sparsecore.ops import spmm
