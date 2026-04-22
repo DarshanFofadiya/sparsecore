@@ -1,0 +1,208 @@
+Tiny Transformer samples from demo_13
+prompt: 'ROMEO:\n'
+============================================================
+
+
+=== Dense ===
+
+--- step 1000 ---
+ROMEO:
+, er nKn mha t too we wP
+t te ai'f IioeoEotg, the c an s uz thu! nh.SVvaItVe3xf pthi
+-Oi$HATWoe nhe saNfeiItco3Uldhebeo teiAl' i'kIe t th,nV.
+t in,bS theoneoEMgst  tthmEPhajeN.isth t theathh o tVultea
+
+--- step 2000 ---
+ROMEO:
+pho
+Dfndsour tonss uthhll Iour,estARr het thapeIoLnr onirkt, utathi&iVL Ie the t To s ac hiake3tLeohiE, sUAthan.y thatoua J wXon?ag hmasey
+e , $CioIinoxga , be haifW, tVyVEhax,
+A- sanNceVemX thig th c
+
+--- step 3000 ---
+ROMEO:
+neorthilsith' El uouie ceof' gsw y
+OeaE thbea, w
+ffd aca l
+
+ACut .
+e to teothito :Lg Wi l the. athaI heak$
+ste w
+T he ySWil, scheaciwontlis t ,t,p c, sY t chiIha ys tee.
+deno, t, thackhime ? a
+iHasith
+
+--- step 4000 ---
+ROMEO:
+Can$MQSZSaawomee t cen,Utht ppfHG h aYey bRur t. b, athoulooeminy
+utaOimce'cseat, E.
+
+
+M th bNIeDits:
+ binn tf Mhe AgisT3te t, thJ:
+u
+-, yITh t y : phcee the w nk, y avaN sh
+howest bors3e sOes,
+E theu
+
+--- step 5000 ---
+ROMEO:
+AusNPv,
+
+Iou ?'k
+TinUJlly e yr,
+NE winoyoongoe uloReououreem s? he,
+
+ thto,
+, t whe me A s oxE;irat wivit ngjo ahvordE:
+rICeuie'lisw
+I:
+
+?hicc htritS
+? ast the gincoNoic st re, f wAv AMim, bt y te th 
+
+
+=== Sparse+Static ===
+
+--- step 1000 ---
+ROMEO:
+foer nK- mhanthtoo wepwPyJ to ai'S Iioe$EodB-DP!Duc an
+s EzyB3u! nr.SSv InVe3xfSpth$
+-Oe$HFTWoe nNHssKNfeiztPojq?dgfbeomOeiAl'zi'kIe 
+ EQ,nm.
+pKinJbS yYLCAQoEMgs3f t!xmEdhaHeN.3stB d these&Xdo tVETSIf
+
+--- step 2000 ---
+ROMEO:
+pho
+DfTisour totheruNNhll IperrestAIanhet thape,ounr onirkth f
+ad i&iVL Ie '
+ek  To s e thiake3nLoohi yo-UA:
+D'.yB tsxoWa JLXXon?agjBmzsey
+ek, $CgoIiy:
+gavdke hatheW, tVyoExex
+
+W-$TavNceremX thigXej c
+
+--- step 3000 ---
+ROMEO:
+neorthiloila' El u, ie ceof' gsw y
+OeaE thber, w
+ffstaha l
+
+t u
+v.
+e vs teonJito :Lg Wi l ty . anu
+Ijreak$.std w
+T  
+BySWSl
+oschenc3wontIber t,xrp pqedYqj cQ
+Ihe ys te:
+
+den$Ered theckhim?E? f
+nHasith
+
+--- step 4000 ---
+ROMEO:
+Can$MQ
+ZSaPComZe t cVQkUtha pgfHG h aPbyrbRe sD. bjaathoulooeminyWuteaimce'
+sekt, EUyothand do e ths:
+ binn tf h And isT3Qe tindnJ:
+u
+
+q?yITh:
+Ane: phcee:
+Thor nky:E av Nysh
+he mot bors3e sOys Fd ther
+
+--- step 5000 ---
+ROMEO:
+AupNPvdA
+Iou ?'.
+,
+Whellyne,ygndNE wXcoyoongoe bboRer oureemTs?Bhe,
+
+ thto,
+, TtO
+h mZ n s exE.ir t e pi
+Jngjo ahvordE:
+rIowuiy'lisw
+
+B.
+?
+ncc htritS
+? ast the gincoNoic
+st re, f wyv AGimOlN'x I G th 
+
+
+=== Sparse+SET(0.1) ===
+
+--- step 1000 ---
+ROMEO:
+foer nK- mhanthtoo wepwPyJ to ai'S Iioe$EodB-DP!Duc an
+s EzyB3u! nr.SSv InVe3xfSpth$
+-Oe$HFTWoe nNHssKNfeiztPojq?dgfbeomOeiAl'zi'kIe 
+ EQ,nm.
+pKinJbS yYLCAQoEMgs3f t!xmEdhaHeN.3stB d these&Xdo tVETSIf
+
+--- step 2000 ---
+ROMEO:
+pho
+DfTisour totheruNNhll IperrestAIanhet thape,ounr onirkth f
+ad i&iVL Ie '
+ek  To s e thiake3nLoohi yo-UA:
+D'.yB tsxoWa JLXXon?agjBmzsey
+ek, $CgoIiy:
+gavdke hatheW, tVyoExex
+
+W-$TavNceremX thigXej c
+
+--- step 3000 ---
+ROMEO:
+neorthiloila' El u, ie ceof' gsw y
+OeaE thber, w
+ffstaha l
+
+t u
+v.
+e vs teonJito :Lg Wi l ty . anu
+Ijreak$.std w
+T  
+BySWSl
+oschenc3wontIber t,xrp pqedYqj cQ
+Ihe ys te:
+
+den$Ered theckhim?E? f
+nHasith
+
+--- step 4000 ---
+ROMEO:
+Can$MQ
+ZSaPComZe t cVQkUtha pgfHG h aPbyrbRe sD. bjaathoulooeminyWuteaimce'
+sekt, EUyothand do e ths:
+ binn tf h And isT3Qe tindnJ:
+u
+
+q?yITh:
+Ane: phcee:
+Thor nky:E av Nysh
+he mot bors3e sOys Fd ther
+
+--- step 5000 ---
+ROMEO:
+AupNPvdA
+Iou ?'.
+,
+Whellyne,ygndNE wXcoyoongoe bboRer oureemTs?Bhe,
+
+ thto,
+, TtO
+h mZ n s exE.ir t e pi
+Jngjo ahvordE:
+rIowuiy'lisw
+
+B.
+?
+ncc htritS
+? ast the gincoNoic
+st re, f wyv AGimOlN'x I G th 
