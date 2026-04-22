@@ -52,16 +52,64 @@ produces the sequential column.
 | MLP-hidden 90%           | 1.68          | 0.33            | **5.1×** |
 | FFN-scale 90%            | 17.90         | 3.94            | **4.5×** |
 
-### End-to-end: `SparseLinear(784, 512, sparsity=0.9)`, batch 128
+### End-to-end training: kernel speedup doesn't translate 1:1
 
-Full forward + backward (through torch autograd):
+**Important honesty section.** The ~5× kernel speedup does NOT turn
+into a ~5× end-to-end training speedup on `SparseLinear`. Measured
+breakdown on `SparseLinear(784, 512, sparsity=0.9)` at batch 128:
 
-| Version                        | Time per step |
-|--------------------------------|---------------|
-| Pre-4c (demo_05 numbers)       | ~44 ms        |
-| Post-4c (default OMP threads)  | **6.8 ms**    |
+| Operation                                | Time |
+|------------------------------------------|------|
+| Raw `spmm_simd` kernel call              | 0.15 ms |
+| Forward pass (no autograd)               | 0.98 ms |
+| Full training step (fwd + bwd + opt)     | 7.67 ms |
+| → Autograd + optimizer overhead          | 6.69 ms |
 
-That's a ~6× end-to-end training speedup on a realistic sparse layer.
+The kernel is 1.9% of the training step. Even a 5× kernel speedup
+saves ~0.12 ms / step.
+
+For comparison, `nn.Linear(784, 512)` dense:
+
+| Operation                                | Time |
+|------------------------------------------|------|
+| Forward pass (no autograd)               | 0.95 ms |
+| Full training step (fwd + bwd + opt)     | 1.40 ms |
+| → Autograd + optimizer overhead          | 0.45 ms |
+
+PyTorch's dense path has ~15× less autograd overhead (0.45 vs 6.69 ms)
+because:
+
+1. **Dense backward is a single fused `at::mm` call in libtorch**,
+   computing both `dX` and `dW` in one kernel. Our backward is three
+   separate pybind11 dispatches: `spmm_grad_w`, `W.transpose()`
+   (allocates a fresh CSR), and `spmm_simd` on the transpose.
+2. **Dense ops skip the numpy↔torch conversion** that our
+   `_SpMMFunction` does on every dispatch (~30 μs × 4 calls).
+3. **Dense never materializes a transpose buffer** — our
+   `W.transpose()` allocates ~50k int32s + 50k floats per step.
+
+### What this means
+
+- The **kernel speedup is real** and will matter greatly once we
+  eliminate the autograd overhead (via a fused `spmm_transpose`,
+  zero-copy pybind11 paths, or a C++ autograd node).
+- It will also matter immediately for **DST algorithms (4e, 4f)**
+  which need to scan `dW` at high frequency — in those loops the
+  kernel *is* the bottleneck.
+- **End-to-end sparse training on MNIST has not measurably sped up
+  from 4c.** We should not claim otherwise in launch materials.
+- The OpenMP work is still a necessary foundation: without it,
+  any future autograd overhead elimination would just expose the
+  single-threaded kernel as the next bottleneck.
+
+### Original (misleading) claim, kept for honesty
+
+Our first draft of this milestone reported "~6× end-to-end training
+speedup" by comparing new `SparseLinear`-based MNIST training
+(6.8 ms/step) to the old demo_05 manual `_SpMMFunction` path
+(~44 ms/step). That conflated the `SparseLinear` refactor's
+dispatch reduction with the OpenMP speedup. The honest numbers are
+above — kernel ~5×, end-to-end ~1-2%.
 
 ## Why the tiny case goes slower (as expected)
 
