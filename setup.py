@@ -132,7 +132,15 @@ def configure_openmp() -> tuple[list[str], list[str], list[str]]:
         # too. That way, if a user somehow imports sparsecore without
         # torch first (unusual — sparsecore always imports torch in
         # its __init__), the dynamic loader still finds a libomp.
-        hb_prefix = os.path.dirname(os.path.dirname(include_path))
+        #
+        # include_path here is "<homebrew-prefix>/libomp/include"
+        # (e.g. /opt/homebrew/opt/libomp/include). Strip ONE level to
+        # get the libomp prefix (/opt/homebrew/opt/libomp), then
+        # append "lib" for the actual library directory. Previous
+        # implementation stripped two levels by mistake and landed on
+        # /opt/homebrew/opt/lib, which doesn't exist — broke every
+        # non-editable wheel build.
+        hb_prefix = os.path.dirname(include_path)
         hb_lib = os.path.join(hb_prefix, "lib")
 
         link_args: list[str] = []
