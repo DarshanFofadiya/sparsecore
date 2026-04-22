@@ -40,11 +40,11 @@ gradient + (for sparse) index arrays — computed exactly from tensor
 sizes, not measured. Excludes transient backward activations which are
 similar on both paths at this batch size.
 
-## Follow-up (demo 6 + demo 7): what happens with more training?
+## Follow-up (demos 6, 7, 8): does sparse actually match dense given time?
 
-The 3-epoch data above is honest but incomplete. We ran two follow-up
-experiments to pin down whether the gap is a convergence artifact or a
-real capacity ceiling.
+The 3-epoch data above is honest but undercooked. Three follow-up
+experiments pin down what happens at longer training budgets, ending
+in a clean converged-vs-converged answer at 90% sparsity.
 
 **Demo 6 (`examples/demo_06_convergence.py`)** — 15 epochs across three
 sparsities with patient early stopping:
@@ -56,50 +56,60 @@ sparsities with patient early stopping:
 | 99%      | 95.66%         | 89.05%          | 6.61pp   | both at ep 15        |
 
 The surprise: nothing plateaued. Every curve was still monotonically
-rising at ep 15. So the gaps above are *early-stopping snapshots*, not
+rising at ep 15. So those gaps are *early-stopping snapshots*, not
 real capacity ceilings. See `demo_06_convergence.png`.
 
-**Demo 7 (`examples/demo_07_90pct_convergence.py`)** — same 90%
-sparsity, but with MAX_EPOCHS=100 and patience=10, so each path
-genuinely trains until it stops improving:
+**Demo 7 (`examples/demo_07_90pct_convergence.py`)** — MAX_EPOCHS=100,
+patience=10, focused on 90% sparsity. Dense converged at ep 82 @
+98.06%. Sparse ran out of budget at ep 99 @ 97.09% (still climbing,
+gap 0.97pp). Partial answer: sparse was clearly going to close further.
 
-| Path   | Best accuracy | Epoch of peak | Total epochs run | Wall time |
+**Demo 8 (`examples/demo_08_sparse_full_convergence.py`)** —
+MAX_EPOCHS=500, patience=10. This time both paths genuinely plateau.
+
+| Path   | Best accuracy | Epoch of peak | Early-stopped at | Wall time |
 |--------|---------------|---------------|------------------|-----------|
-| Dense  | 98.06%        | 72            | 82 (plateau)     | 232 s     |
-| Sparse | 97.09%        | 99            | 100 (ran out)    | 700 s     |
+| Dense  | 98.06%        | 72            | ep 82            | 232 s     |
+| Sparse | **97.45%**    | 130           | ep 140           | 969 s     |
 
-**Gap at 90% sparsity: 0.97 pp.**
+**Converged gap at 90% sparsity: 0.61 pp.**
 
-Two important facts are baked into that single number:
+The final trade is now concrete and symmetric: both models hit their
+true plateau, and sparse lands 0.61 pp short of dense. See
+`demo_08_full_convergence.png` for the trajectories side by side.
 
-- **Dense genuinely plateaued.** Best at epoch 72, stale for 10 straight
-  epochs, early stopping triggered at epoch 82. This is the dense
-  path's real ceiling on this task.
-- **Sparse was still climbing when we ran out of budget.** Best at
-  epoch 99 out of 100 allowed. A longer run would almost certainly
-  reduce the gap further — sparse gained +0.13pp in its last 5 epochs
-  and hadn't had a 10-epoch stale window at any point.
+**Epoch ratio: sparse needed 1.8× dense's epochs.** Dense peaked at
+ep 72, sparse at ep 130. That's the real cost of the narrow
+information channel at 90% sparsity — you get essentially the same
+accuracy, but the model takes longer to find good weight placements
+with the random-and-fixed mask we're using.
 
-Even under that conservative reading, **at 90% sparsity sparse gets
-within 1 pp of dense**, for 18% of dense's memory. That's not a
-plateau-vs-plateau claim (we ran out of compute before we could make
-that one cleanly), but it's enough to say: the earlier 3-epoch and
-15-epoch gaps were *mostly convergence, not capacity*.
+**Putting the MNIST 90% story in a sentence:**
 
-See `demo_07_90pct_curves.png` for the full trajectories. The visual
-is striking — both curves are still on the same overall trend when
-sparse runs out of epochs.
+> At 90% sparsity on MNIST, the SparseCore sparse path reaches 97.45%
+> test accuracy vs dense 98.06% — **a 0.61 pp gap for 82% memory
+> reduction, at the cost of 1.8× training epochs.**
 
-**What we still don't know and are being upfront about:**
+That last qualifier ("training epochs") is important. On Apple
+Silicon, where dense AMX is always faster per epoch than our NEON
+sparse path, sparse's 1.8× more epochs × ~3× slower per epoch = ~5×
+wall-clock cost to reach the same accuracy. On non-Apple CPUs without
+AMX, the per-epoch comparison should be much more even (this is the
+untested story from `demo_05` section 5). On those platforms, the
+"1.8× more epochs" is the only cost that remains — and 82% memory
+savings for 1.8× epochs is an actively interesting trade.
 
-- The exact asymptotic gap. To claim "sparse fully matches dense at
-  90%" we'd need to let sparse train until *it* triggers the patience
-  stop. That's a 20–30-minute run; we've left it as a known follow-up
-  rather than pretending the 0.97pp number is the final answer.
-- Whether the same convergence story holds at 99% sparsity. The demo_6
-  snapshot (6.61pp at ep 15) is steep enough that there may be a real
-  structural component there — precisely the regime where RigL-style
+**What demo 8 still doesn't settle:**
+
+- Whether the convergence story holds at 99% sparsity. Demo 6's snapshot
+  (6.61pp at ep 15) was steep enough that there may be a real structural
+  component there — precisely the regime where RigL-style
   gradient-based regrow (milestone 4e) is supposed to earn its keep.
+- Whether a smarter initial mask (magnitude-based, or even trained
+  briefly dense then pruned) lets sparse match dense in *fewer* epochs
+  at 90%. Our experiment uses a purely random mask, which is the worst-
+  case baseline. RigL-style regrow is the systematic version of
+  "make the mask smarter." That's milestone 4e.
 
 ## What the 3-epoch data tells us (findings from demo_05)
 
@@ -209,9 +219,9 @@ self.fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)
 
 ## Commits
 
-- (this commit) — feat(demo): MNIST convergence sweep at 7 sparsities +
-  loss-curve plot + memory-at-rest column + follow-up convergence
-  experiments (demo_06, demo_07) + this write-up
+- 66ad25a — feat(demo): MNIST at multiple sparsities + memory-at-rest column
+- 1d551b0 — feat(demo): convergence-to-exhaustion at 90% sparsity (demos 6 + 7)
+- (this commit) — feat(demo): full converged-vs-converged answer at 90% (demo 8)
 
 ## What's next
 
