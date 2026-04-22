@@ -22,12 +22,20 @@
 
 #include "kernels/double_tensor.hpp"
 #include "kernels/vector_dot.hpp"
-#include "kernels/vector_dot_neon.hpp"
 #include "kernels/padded_csr.hpp"
 #include "kernels/spmm.hpp"
-#include "kernels/spmm_neon.hpp"
 #include "kernels/spmm_grad.hpp"
 #include "kernels/dense_grad.hpp"
+
+// NEON sources are ARM64-only. On x86 we skip including the NEON headers
+// (they'd pull in <arm_neon.h>) and wire the "_simd" Python wrappers to
+// fall back to the scalar kernels. The public API stays identical — users
+// can still pass kernel="simd" from Python, they just get the scalar
+// kernel underneath on non-ARM hardware.
+#if defined(__ARM_NEON)
+  #include "kernels/vector_dot_neon.hpp"
+  #include "kernels/spmm_neon.hpp"
+#endif
 
 namespace py = pybind11;
 
@@ -134,7 +142,15 @@ float py_vector_dot_simd(
     const float* b_ptr;
     std::size_t n;
     validate_and_extract_dot_inputs(a, b, "vector_dot_simd", a_ptr, b_ptr, n);
+#if defined(__ARM_NEON)
     return sparsecore::vector_dot_simd_neon(a_ptr, b_ptr, n);
+#else
+    // Non-ARM fallback: scalar kernel. The public API stays stable so
+    // Python callers don't break when running on x86; they just don't
+    // get the NEON speedup (which doesn't exist on x86 anyway — AVX is
+    // a v0.2 community contribution opportunity).
+    return sparsecore::vector_dot_scalar(a_ptr, b_ptr, n);
+#endif
 }
 
 
@@ -228,7 +244,12 @@ py::array_t<float> py_spmm_simd(
     py::array_t<float, py::array::c_style | py::array::forcecast> X
 ) {
     auto plan = prepare_spmm(W, X, "spmm_simd");
+#if defined(__ARM_NEON)
     sparsecore::spmm_simd_neon(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+#else
+    // Non-ARM fallback: scalar SpMM. See py_vector_dot_simd rationale.
+    sparsecore::spmm_scalar(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+#endif
     return plan.Y;
 }
 

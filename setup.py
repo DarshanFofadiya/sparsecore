@@ -26,6 +26,13 @@ IS_APPLE_SILICON = (
 )
 IS_MACOS = sys.platform == "darwin"
 
+# ARM64 covers Apple Silicon, Linux aarch64 (Graviton, RPi 5, Ampere),
+# and any other arm64 target. NEON is available on all ARM64 hardware,
+# which is our gating condition for compiling the NEON kernels.
+# On x86 / x86_64 we must NOT try to compile the NEON sources at all —
+# their arm_neon.h include fails and arm_neon intrinsics don't exist.
+IS_ARM64 = platform.machine() in ("arm64", "aarch64")
+
 if IS_APPLE_SILICON:
     extra_compile_args = [
         "-O3",
@@ -201,17 +208,26 @@ ext_modules = [
         name="sparsecore._core",
         # All C++ sources that need to be compiled and linked together.
         # Kernels go in csrc/kernels/*; bindings.cpp is the pybind11 entry point.
+        #
+        # NEON sources (spmm_neon.cpp, vector_dot_neon.cpp) are gated on
+        # IS_ARM64. On x86 they can't be compiled — their #include
+        # <arm_neon.h> fails and they self-guard with an #error. The
+        # bindings layer expects the NEON symbols to exist on ARM64 and
+        # to NOT exist on x86; the C++ side handles dispatch correctly.
         sources=[
             "csrc/bindings.cpp",
             "csrc/kernels/double_tensor.cpp",
             "csrc/kernels/vector_dot.cpp",
-            "csrc/kernels/vector_dot_neon.cpp",
             "csrc/kernels/padded_csr.cpp",
             "csrc/kernels/spmm.cpp",
-            "csrc/kernels/spmm_neon.cpp",
             "csrc/kernels/spmm_grad.cpp",
             "csrc/kernels/dense_grad.cpp",
-        ],
+        ] + (
+            [
+                "csrc/kernels/vector_dot_neon.cpp",
+                "csrc/kernels/spmm_neon.cpp",
+            ] if IS_ARM64 else []
+        ),
         # Include paths used for `#include "kernels/foo.hpp"` etc.
         # OpenMP includes are appended by configure_openmp() above.
         include_dirs=["csrc", *omp_include],

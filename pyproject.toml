@@ -104,32 +104,38 @@ test-requires = []
 # OS that supports arm64 natively. Setting MACOSX_DEPLOYMENT_TARGET
 # locks the wheel to work on this-or-newer.
 environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
-# Homebrew installs libomp to /opt/homebrew (arm64) or /usr/local
-# (x86_64). We prepend these to the build environment so setup.py
-# finds libomp headers (we only need headers — the runtime lib comes
-# from torch's wheel).
-#
-# IMPORTANT: we install torch at build time so setup.py's first-branch
-# logic fires (link rpath into torch/lib/libomp.dylib). Without this,
-# the fallback branch links to Homebrew's libomp, which collides with
-# torch's libomp at runtime and aborts OpenMP initialization. This
-# was observed in a local wheel-build dry run; see docs/RELEASE.md
-# troubleshooting table.
+# Install libomp + torch before each build so setup.py can find libomp
+# headers and link against torch's bundled libomp.dylib via rpath.
 before-build = [
     "brew install libomp || true",
     "pip install torch>=2.8",
 ]
-# When delocate-wheel copies libomp into the wheel, its default
-# behavior on arm64 is to bundle /opt/homebrew/opt/libomp/lib/libomp.dylib.
-# We DON'T want that — we want the wheel to stay reliant on torch's
-# libomp at runtime to avoid the double-library collision.
+# The crux of the macOS story: PyTorch's wheel ships its own libomp.dylib
+# inside torch/lib/. We want our wheel to DEPEND on torch's libomp at
+# runtime, not carry its own copy. If we let delocate bundle libomp into
+# sparsecore/.dylibs/, there are TWO copies of libomp in the process
+# (torch's + ours) and OpenMP's runtime aborts the process (SIGABRT
+# on init, observed as exit code -6 in the smoke test).
 #
-# --require-archs arm64 ensures the bundled libs are architecture-
-# compatible; more importantly the rpath to @loader_path/../torch/lib
-# is preserved by delocate's default behavior so a user's
-# `import sparsecore` after `import torch` finds torch's libomp.
+# Strategy:
+#   1. Run our custom repair script (scripts/repair_wheel_macos.sh)
+#      which:
+#        a. Runs delocate in list-only mode to confirm libomp is the
+#           only delocatable dep (or errors loudly if something else
+#           would be bundled).
+#        b. Calls delocate-wheel with --exclude libomp.dylib so no lib
+#           is bundled and no install-name rewrite happens.
+#        c. Rewrites our _core.so's libomp install name to
+#           @rpath/libomp.dylib so the dynamic loader searches all
+#           rpaths at runtime.
+#        d. Ensures our rpath list includes @loader_path/../../torch/lib
+#           so torch's libomp is findable from an installed wheel.
+#   2. At runtime, sparsecore/__init__.py imports torch FIRST, which
+#      loads torch's libomp. When _core.so loads, its @rpath/libomp.dylib
+#      lookup resolves to the already-loaded torch libomp. One copy in
+#      the process. No collision.
 repair-wheel-command = [
-    "DYLD_LIBRARY_PATH=$(python -c 'import torch, os; print(os.path.join(os.path.dirname(torch.__file__), \"lib\"))') delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+    "bash {project}/scripts/repair_wheel_macos.sh {wheel} {dest_dir} {delocate_archs}"
 ]
 
 # ─── Linux-specific configuration ─────────────────────────────────
