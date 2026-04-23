@@ -225,4 +225,4 @@ curves. If RigL beats Static by any margin, that's the launch narrative.
 **Milestone 4g: the tiny transformer demo.** With Static / SET /
 RigL all plumbed, we pick the best-performing algorithm (almost
 certainly RigL) and train a small character-level transformer with
-it. That's the Hacker News headline.
+it. That's the v0.1 launch artifact.

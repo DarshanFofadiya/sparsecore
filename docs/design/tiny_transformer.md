@@ -7,8 +7,8 @@ Shakespeare, that actually converges and generates coherent text —
 on a MacBook, in under 10 minutes, with sparse FFN weights via
 SparseCore.
 
-This is the demo that goes on Hacker News. It's the "show, don't
-tell" proof that sparse-from-scratch training is practical on CPU.
+This is the launch demo: the "show, don't tell" proof that
+sparse-from-scratch training is practical on CPU.
 
 ## What this demo is NOT
 
