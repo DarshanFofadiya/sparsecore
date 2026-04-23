@@ -94,11 +94,21 @@ skip = [
 # to verify it actually loads and works.
 #
 # Note: cibuildwheel runs test-command from a temporary test directory
-# (not the project root), so a relative path like "scripts/smoke_test.py"
-# would fail. $GITHUB_WORKSPACE is set by the GitHub Actions runner to
-# the absolute path of the checked-out repo and is inherited into the
-# test environment, so we use it to locate the smoke test script.
-test-command = "python $GITHUB_WORKSPACE/scripts/smoke_test.py"
+# (not the project root), so a bare relative path wouldn't resolve.
+# The {project} placeholder IS substituted for test-command
+# (unlike repair-wheel-command) — we verified this in cibuildwheel v2.22
+# source: test_command_prepared = prepare_command(
+#     build_options.test_command,
+#     project=Path(".").resolve(),
+#     package=build_options.package_dir.resolve(),
+#     wheel=repaired_wheel)
+# so {project} and {package} both work here.
+#
+# On Linux this resolves to the mount path inside the manylinux
+# container (typically /project). Using $GITHUB_WORKSPACE here breaks
+# Linux builds because the container doesn't inherit the host
+# runner's environment.
+test-command = "python {project}/scripts/smoke_test.py"
 # Install torch at test time (our dependency, but we want the wheel env
 # to install it fresh, not carry it over from build).
 # This mirrors what a real user's `pip install sparsecore` will do.
