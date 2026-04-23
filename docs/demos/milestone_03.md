@@ -124,10 +124,10 @@ this comparison, not our best. That's a strong talking point.
 - Inspect assembly: `clang++ -O3 -std=c++17 -mcpu=apple-m1 -S
   csrc/kernels/spmm.cpp -Icsrc | grep fmla`
 
-## Commits
+## What landed
 
-- `bed197b` — feat(spmm): scalar Y = W @ X for PaddedCSR
-- (this milestone's commit) — feat(spmm): NEON SIMD + benchmark demo
+- feat(spmm): scalar Y = W @ X for PaddedCSR
+- feat(spmm): NEON SIMD + benchmark demo
 
 ## What's next (Milestone 4a)
 

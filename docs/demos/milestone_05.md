@@ -224,12 +224,12 @@ demo becomes simple:
 self.fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)
 ```
 
-## Commits
+## What landed
 
-- 66ad25a — feat(demo): MNIST at multiple sparsities + memory-at-rest column
-- 1d551b0 — feat(demo): convergence-to-exhaustion at 90% sparsity (demos 6 + 7)
-- 7614bab — feat(demo): converged-vs-converged answer at 90% (demo 8)
-- (this commit) — feat(nn): SparseLinear nn.Module + demo_05 rewrite to use it
+- feat(demo): MNIST at multiple sparsities + memory-at-rest column
+- feat(demo): convergence-to-exhaustion at 90% sparsity (demos 6 + 7)
+- feat(demo): converged-vs-converged answer at 90% (demo 8)
+- feat(nn): SparseLinear nn.Module + demo_05 rewrite to use it
 
 ## What's next
 

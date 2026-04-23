@@ -148,10 +148,10 @@ Y = layer(X)
 That's the "two lines of code to swap into your training script"
 promise the positioning depends on.
 
-## Commits
+## What landed
 
-- `3efe661` — docs(design): backward-pass spec
-- `c231a67` — feat(layout): PaddedCSR.transpose()
-- `0d459f1` — feat(spmm): dL/dW kernel at live slots
-- `2c17725` — feat(autograd): loss.backward() integration + writable values
-- (this commit) — docs(milestone_04): demo script + this doc
+- docs(design): backward-pass spec
+- feat(layout): PaddedCSR.transpose()
+- feat(spmm): dL/dW kernel at live slots
+- feat(autograd): loss.backward() integration + writable values
+- docs(milestone_04): demo script + this doc

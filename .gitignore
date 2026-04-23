@@ -64,3 +64,11 @@ logs/
 # the repo — CI uploads them to PyPI directly.
 wheelhouse/
 *.whl
+
+# ─── Kiro internal working docs ─────────────────────────────────────
+# AI steering and system prompt files — kept on disk for the IDE
+# (Kiro uses them as project guidance) but never committed, since
+# they contain iteration-specific working notes.
+# Backups live in a separate private repo (kiro-templates).
+.kiro/
+docs/SYSTEM_PROMPT.md

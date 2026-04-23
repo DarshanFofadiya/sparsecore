@@ -181,10 +181,10 @@ Untested in this milestone; will be validated when we add CI.
   architectures may want a different threshold. Left as a future
   contributor-friendly tuning knob.
 
-## Commits
+## What landed
 
-- (this commit) — feat(parallel): OpenMP-parallel SpMM kernels +
-  benchmark demo + 27 correctness tests
+- feat(parallel): OpenMP-parallel SpMM kernels + benchmark demo +
+  27 correctness tests
 
 ## What's next
 

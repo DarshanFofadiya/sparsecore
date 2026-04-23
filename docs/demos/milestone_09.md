@@ -148,10 +148,10 @@ Three directions surfaced and are captured in `docs/LANDSCAPE.md`
   shows RigL's advantage appears. Cheap to measure; we just didn't
   do it at v0.1 to keep the demo quick.
 
-## Commits
+## What landed
 
-- (this commit) — feat(rigl): RigL + dense_grad kernel + drop-fraction
-  sweep + 23 new tests + 2 demos
+- feat(rigl): RigL + dense_grad kernel + drop-fraction sweep +
+  23 new tests + 2 demos
 
 ## What's next
 
