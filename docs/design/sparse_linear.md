@@ -38,7 +38,7 @@ fc2 = nn.Linear(512, 10, bias=False)
 
 ## Prior art (what we're adopting and from whom)
 
-Following `.kiro/steering/borrow-dont-reinvent.md`, the survey:
+Survey of the projects whose APIs and storage layouts influenced ours:
 
 | Library | What we borrow | What we diverge on |
 | ------- | -------------- | ------------------ |

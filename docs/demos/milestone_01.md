@@ -47,7 +47,3 @@ For multiply-by-2 the diff should be *exactly zero* (floating-point multiplicati
 - No sparsity — we haven't defined a sparse format yet.
 - No autograd integration — that's Phase 4.
 - No performance improvement — this is plumbing, not a benchmark.
-
-## Public-artifact status
-
-Per `.kiro/steering/demo-driven.md`, Milestone 1 is **internal only** — not shared in Quiet Open threads. It's a "we can breathe, the toolchain works" celebration, not community-facing content.

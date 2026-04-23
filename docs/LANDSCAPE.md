@@ -149,7 +149,7 @@ algorithm), and **accessibility** (no GPU required to prototype).
 
 Every project listed above has already solved problems we will hit. Before designing any public API, schedule format, checkpoint layout, or algorithm signature, **we study the equivalent in Cerebras / Neural Magic / torchao / rigl-torch first**, and either adopt their design (with credit) or write a one-sentence justification for why we diverge.
 
-This is engineering humility, not laziness. Our moats are the Padded-CSR layout and the Apple Silicon NEON kernels — everything else should match community conventions. See `.kiro/steering/borrow-dont-reinvent.md` for the full policy and the priority reference list.
+This is engineering humility, not laziness. Our moats are the Padded-CSR layout and the Apple Silicon NEON kernels — everything else should match community conventions.
 
 Contributions that propose new API patterns are welcome, but expected to include a "prior art" section explaining what existing project they considered and why this design is preferred.
 

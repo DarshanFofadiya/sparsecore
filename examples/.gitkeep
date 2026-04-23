@@ -1,4 +1,3 @@
 # Placeholder to preserve this folder in git.
 # examples/ holds runnable demo_NN_*.py scripts — one per milestone.
 # These are the user-facing proof-of-progress artifacts, not tests.
-# See .kiro/steering/demo-driven.md for the full policy.

@@ -66,7 +66,3 @@ If you ever see:
 - **NEON slower than scalar** — likely a compiler flag regression. Check `setup.py` for `-mcpu=apple-m1` and `-O3`.
 - **NEON speedup at n=10_000 but not at n=1_000_000** — possibly thermal throttling; rerun after a few minutes of cool-down.
 - **Large numerical diff in the correctness block** — don't panic yet; check relative, not absolute. Absolute grows with size; relative doesn't.
-
-## Public-artifact status
-
-Per `.kiro/steering/demo-driven.md`, Milestone 2's demo is **shareable in Quiet Open community threads** (r/cpp, r/simd) once the repo goes public. The 16-line NEON kernel with its teaching comments makes it a clean artifact for "I learned NEON building SparseCore" content.
