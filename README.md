@@ -570,6 +570,23 @@ every user forever.
 
 ---
 
+## Acknowledgments
+
+- The `SparsityAlgorithm` API shape is inspired by
+  [Cerebras's `cstorch.sparse.SparsityAlgorithm`](https://training-api.cerebras.ai/en/latest/wsc/tutorials/sparsity.html).
+  Their production-hardened API on wafer-scale hardware is the
+  industrial reference for sparse training; we borrow the shape,
+  diverge on the storage substrate (they use dense+mask, we use
+  Padded-CSR for commodity hardware).
+- The Padded-CSR layout, the NEON SpMM / dW / dense-grad kernels,
+  the transpose cache, and the pluggable router design are
+  original work.
+- Build patterns for CI + wheel packaging learned from the
+  scientific-Python ecosystem (cibuildwheel, delocate, auditwheel
+  practices).
+- `docs/LANDSCAPE.md` has the full audit of prior art and what we
+  learned from each project.
+
 ## License
 
-MIT. Built by [Darshan Fofadiya](https://github.com/DarshanFofadiya).
+MIT — see [LICENSE](LICENSE). Copyright © 2026 [Darshan Fofadiya](https://github.com/DarshanFofadiya).
