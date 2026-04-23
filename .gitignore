@@ -72,3 +72,4 @@ wheelhouse/
 # Backups live in a separate private repo (kiro-templates).
 .kiro/
 docs/SYSTEM_PROMPT.md
+docs/RELEASE.md
