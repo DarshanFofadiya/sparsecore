@@ -73,6 +73,10 @@ Standard CSR is fast to read but brittle under mutation — inserting a new nonz
 
 **Padded-CSR** over-allocates each row with empty slots, giving us **O(1) insertion** during the grow phase of backprop. The cost is a small memory overhead (typically 10-20% of the row capacity).
 
+**Mutation model.** `row_capacity[i]` is set at layer construction from the initial per-row `nnz × (1 + padding_ratio)` and stays frozen for the life of the layer. Topology mutation happens through a single primitive, `rewrite_row(i, new_cols, new_values)`, which overwrites row `i`'s slot range in place and fills trailing slots with a `col=-1, value=0` sentinel. There's no free-list, no compaction, no garbage collection — the padding slots are simply recycled when `nnz` drops and re-used when `nnz` grows.
+
+This is sufficient for algorithms where per-row `nnz` stays constant over training (SET, RigL as shipped). It's *not* sufficient for algorithms where `nnz` can drift — those would need a `compact_all()` primitive that redistributes capacity across rows, which is planned for v0.2.
+
 ## 5. The Pluggable Router API
 
 This is the product researchers interact with.
@@ -189,10 +193,15 @@ priority items:
 - **dW kernel optimization.** At FFN-mid scale, `dW` is 62% of a
   training step. A NEON-vectorized dW is measured at ~1.3–1.5×
   end-to-end speedup and is the headline v0.2 item.
+- **`PaddedCSR.compact_all()` primitive** (v0.2). Redistributes
+  row capacity based on current `nnz`, enabling adaptive-density
+  DST algorithms where per-row live count drifts across training.
 - **Windows native wheels** (v0.2). Removes the WSL2 workaround.
+- **Intel Mac wheels** (v0.2). Once GitHub's replacement runner ships.
 - **PyTorch DDP compatibility** (v0.3). The plumbing mostly works;
   needs end-to-end validation and a multi-node demo.
 - **Sparse attention as a first-class primitive.** We proved it
   works at 70% attention sparsity + 90% FFN sparsity in
-  `demo_14_sparse_attention.py`; v0.2 or v0.3 promotes the pattern
-  to a documented API.
+  `demo_14_sparse_attention.py` and at 10k-step scale in the
+  launch demo; v0.2 or v0.3 promotes the pattern to a documented
+  API.

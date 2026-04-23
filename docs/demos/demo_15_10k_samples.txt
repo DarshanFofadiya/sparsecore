@@ -1,0 +1,191 @@
+Mini-GPT samples from demo_15 (Tiny Shakespeare)
+Prompt: 'ROMEO:\n'
+Steps: 10000   Seed: 42   Started: 2026-04-22 11:32:27
+============================================================
+
+
+========================================================================
+ Dense
+========================================================================
+
+--- step 1000 ---
+ROMEO:
+Tt Sdond we car s s v
+IeomengI hithathod ofre me hJulimn pes P wo hanthe tovel I wite ale comeanede yv
+
+Tino
+ng hllt ce I oro ther te nd .g nofoafanonoulnchano and brdth t t ar souur w hesoortur pr he
+
+--- step 2000 ---
+ROMEO:
+D, owathanLll A- y, wi-U rin-hesy ato besatho f dsor i tengf le whath he i'pist t n $ooear d y, o'the, be is tAnrongi wo n se brathang thy atord theandorhind s mqndW.
+T herstor mourn$ t s andng than w
+
+--- step 3000 ---
+ROMEO:
+3; t w'stouthineersore y t and m s sthant theaO
+And aws I outhelouhe.
+
+
+I d lyouins han y wed areathe the rd th, fe peep thef w the ch artonsthay hoand
+Lrond houren IGXOthy sthath, kfcon:
+Ae cthandr w
+
+--- step 4000 ---
+ROMEO:
+ARLy taturele ce thoud thes, gane as wir atr ge thoupe:
+Aate  p bre thap tourelere ath aWou ul olond I
+
+
+Ahellllarcouu im the s hin mTorcr, her d nd to ceallgllllldpr be mersh hangevend, bestheld d hw
+
+--- step 5000 ---
+ROMEO:
+HANZh:
+KINGotho'eaiGand rsthiro I,
+ARg g, bondyS:
+BRDMRIO:
+SAnd d, thand beapan bon e stoous,
+Ax maru harinthat cendwhanos w y t warend fe at y ofoulnd thomyAHADWhast is rXss oround w s the bure thang
+
+--- step 6000 ---
+ROMEO:
+Thifind:
+I m urss d, aB:
+
+IO
+Ansthange a ts haisteas,
+Rthe o gomange an as st, d s t cathe t poulef t be blld o meas as dolll e fod yore core rergsptou s asowares st cer mp t wd thencere Iche,
+Ye athe
+
+--- step 7000 ---
+ROMEO:
+ARERO:
+:
+Twow
+Whou wee w-frend RIAnghave we me s,
+
+
+Wh we maleatll met.
+
+Thewhal tht wid od therek tond hi!
+
+Wof onere ke, wind ke ourese ng tute.
+Gord ard beng ourthy the.
+C tof athispld nthodilpousn
+
+--- step 8000 ---
+ROMEO:
+ARDUCAZEE:ENHAng, t finice we w ware bursthide fy, wesshey t hes:
+To s thiore it m.
+Tutome isoucewaceave t oo E shome t Cat westh atho;
+S:
+NG thowion tENI hict hather dithe bes be st f f nincour wis f
+
+--- step 9000 ---
+ROMEO:
+Wyoon ff y he ingaulour athers inthan urenghid to and ad whe dourpartethe s k.
+Anthelin ureg thind Heeathe f aguthe, t be tour arer das the s q's berthatolaruth thes yove cht coforedet hofoushe tara f
+
+--- step 10000 ---
+ROMEO:
+An?e susheng.
+RERICIO:
+MERI t med; d f wede ond wiruthanthe wel ghen me wamme olly mest ar,
+Lor
+NJ mand idsegarer woulaleve f ingnd pis d hefatan wnke d chals chacout bethatrtand NEN tonorend wathe a,
+
+
+========================================================================
+ Sparse (FFN 90%)
+========================================================================
+
+--- step 1000 ---
+ROMEO:
+ toe
+ipTindV
+ththoforpanor y Tr t te this hereousyan th s theuilieve amd coBur wy lithaltahere thistht re the cono a,sthin wIthinind llthy lrovstI lro l
+r f d m thhest;fadourt tiithedurr s fhout; wlit
+
+--- step 2000 ---
+ROMEO:
+asBNOuthevedado trT-Wnd w.
+Nfd mourQy d mThe tzcon hact or titothe tell t doremy tooGchinhen a mfAbeingr T that f thv
+Cev amOknd pinoucowawouisu wNI, llOqve, In, meseves ath, gangaus t mnd thinou blin
+
+--- step 3000 ---
+ROMEO:
+Aourdis cooucoRE, y,
+r l mat gen'sked I ankingengte prouTouLor log ahe wiangRE:
+Tar,
+C.
+Wshorll thaven Lmesee y te wo tis,
+I wis m's anaerist nd mypalCNfar wh s mancine har sour t,
+
+T:
+
+, we let the w
+
+--- step 4000 ---
+ROMEO:
+H-E,
+T
+Cl!!HhaY
+; I uthe meF d fr thend iEthes, here f stor wiAere anomachiE mepind t balalO
+t Aurdildchawoo wnmes wage l hano t wand,
+TtGothisiof, ce uH
+Tiplan thint thor thinthe, pr ndgulm avetiamu,
+
+--- step 5000 ---
+ROMEO:
+cay rindshilald che, f hamyoutht thedo thee, hy tou thil ar sceremyorse t melatore scareer
+Whend bre This nd mer t s pameand t:
+Ot w mouthes, malele wind woorinds me, man lllaus nd b, tud womere wind 
+
+--- step 6000 ---
+ROMEO:
+Wher cgon moce!N cast sl imeannd, CI.
+Whid
+d fOMeale harut gere' me the sht bthiowingoinenin mu t lle he thamewoe arindiot hIo bu:
+ThansordAngs the kdesti?
+F nd w thas, thann be, t wh t y athilo cedav
+
+--- step 7000 ---
+ROMEO:
+We!he hartfalithit w the nd t pe fithat n-gits:
+T, wiar bllaneithat iV mat thoupe.
+E?CithandVe forerlowente y tous besele mpa?
+
+Tour thalloroulloume par, b nd,
+s, alUn wroro aulfI
+Thicoube hit w as ta
+
+--- step 8000 ---
+ROMEO:
+Mo hil!irofSind I waulotith ounis.
+Toowingorthe that plllo helllath,
+
+Kechiere sth t he t, hiroke gX ke is wothire walerout mansandlld t f maset as st, ahe telch me arr hen f t cncotaradowey m thd m:
+
+
+--- step 9000 ---
+ROMEO:
+
+GRThy wr, char D:
+;ng hal atourot st!ughathuroupray ord'sthithis pro t bu d ed tre bo thabe I g f bllik s ot sthojo, t tyRDo t t therand athace ciy areancd t he the urelmele tour.
+
+Eld men'eagreas ts
+
+--- step 10000 ---
+ROMEO:
+Who I f:
+trOud, y loumes owindveave wiverprineandin:
+D
+Tin andigk ie,
+ARI thr precrere ms, IN I and, th om.
+Thacotor f f myo the p:
+
+INThor re ENRlif avoulLO, id thar t t f ve:
+; w:
+
+Trowe namareicoma

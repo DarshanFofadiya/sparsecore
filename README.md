@@ -259,6 +259,16 @@ pip install -e '.[demos]'
 - **Sparse attention is not a primitive.** We showed it works (see
   `demo_14_sparse_attention.py`) but didn't promote it to a
   first-class API in v0.1.
+- **Fixed row capacity in Padded-CSR.** Each row's capacity is frozen
+  at layer construction (initial `nnz × 1.2`). This is what gives us
+  O(1) insertion during topology mutation, but it means algorithms
+  that want to grow a row's live count beyond its initial capacity
+  will fail — `rewrite_row` throws rather than reallocating. SET and
+  RigL work fine because they keep per-row `nnz` constant
+  (drop-then-grow of equal count). Adaptive-density DST algorithms
+  (where per-row `nnz` can drift up or down) would need a
+  `compact_all()` rebalance primitive that v0.1 doesn't ship. Planned
+  for v0.2.
 
 ---
 
@@ -273,6 +283,9 @@ PyPI wheels for macOS and Linux.
 - **Windows native wheels** — removes the WSL2 workaround.
 - **Intel Mac wheels** — once GitHub's replacement Intel CI runner
   ships so we can build + test natively.
+- **`PaddedCSR.compact_all()` primitive** — redistributes row
+  capacity based on current `nnz`, enables adaptive-density DST
+  algorithms that don't hold `nnz` constant.
 - NEON `dW` kernel — the main outstanding speedup target
   (~1.3–1.5× end-to-end at FFN scale).
 - Buffer reuse / arena in the backward path.

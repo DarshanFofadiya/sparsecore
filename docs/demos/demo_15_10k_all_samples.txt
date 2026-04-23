@@ -1,0 +1,123 @@
+Mini-GPT samples from demo_15 (Tiny Shakespeare)
+Prompt: 'ROMEO:\n'
+Steps: 10000   Seed: 42   Started: 2026-04-22 15:24:33
+Paths: ['all']
+============================================================
+
+
+========================================================================
+ Sparse (all: attn 70% + FFN 90%)
+========================================================================
+
+--- step 1000 ---
+ROMEO:
+TbMTKr hey ginCl i?,
+
+QOwfDs fincQ?.
+RWaNp
+G3 t&qEUtse sthanQqUkd t sqEvenecor thouegay ceIveld sthat mZM3s tP-, sMbe wit nd g me-Ululge.
+fzLint aeK mlMx:s bWeal.rke lLl tre avnn wThan th se t mkur nd
+
+--- step 2000 ---
+ROMEO:
+
+Abong toroExge ypfe the mins gPCE t wn
+LA a tMe dpxqpndelle, aYVpO owinsed&I$D I cther on se and,
+Afrine ler utrourtours dt f fitar3bulinc.
+, thise fd y m s f y tend wrs etr then sthiutowourind an,
+
+
+
+--- step 3000 ---
+ROMEO:
+
+OMGthomyVwhat urereeran,
+Az'sin t perXPak hactr bVbe e fn sswe l; ou af s a apesofX mWisare thondf h prse tinbk re, he, bine y t t nt f ers w ar herm$ f n fore n  G aind A3rarai.
+M3Ketheresrd ff.
+N$ 
+
+--- step 4000 ---
+ROMEO:
+
+WieWe
+o hisid ounche thit s y wo han ked n hamxke t ousaD mofomins irans hoourcou I t athatar t it:
+Nsiou tinolcheind isther ben fVe me, t thand,
+
+Mxind silly th my,
+
+
+I m;
+3. an wnd ton, arien o me 
+
+--- step 5000 ---
+ROMEO:
+Tha ton sed od,
+AnGn se sonownt. fe o witrorthareladoins bee t th pant the,
+asur av a.
+oy thathisew
+B I this I ay tke my feart fren n y
+O:
+I me fimerd as ben ave r lG?ODt O:
+prs rvend t y b:
+My d th a
+
+--- step 6000 ---
+ROMEO:
+
+Dare mSheathathes,pthaly or I wianen:
+
+BAu hat d talller noomoond d t,
+Thes himer a, bes wineditoe be I sxelough ilouscathateachereaind onalle bbe orth s:
+ut tit aretre, ulllllas s,
+prd s whit.
+N cer
+
+--- step 7000 ---
+ROMEO:
+
+INO:
+
+Ts thien.
+Wheghet met t
+Ise aden ?eithe!
+An se and towin d send seotalour our?
+E:
+
+
+Bucheas.
+M hist th hengicedinere an tres t:
+A, t wellll fourd is d on ails bldfit ie
+T tintr forerlllngin art
+
+--- step 8000 ---
+ROMEO:
+Anch:
+
+NGo the:
+
+Wiefhor the al t me 3:
+ofano at d aner g; and, ld s bllo t t.
+Then t oreshey hy, nd dw, tJ tirin dDHiee t trrds wen:
+
+
+H:
+
+
+CEllis.
+B thour my th fomay or w the t shau prang akinurs t
+
+--- step 9000 ---
+ROMEO:
+NGTh h, at hithes,
+Rriche ce
+MA g meray, Anotore wiount f lor faLad l,
+Whe.
+
+Afond yots sanomemt t my nd ond nce iWhouthe theathid heris my ea, Borivesthelllis.
+O$; t ctrtou th be momat wollimhemen t 
+
+--- step 10000 ---
+ROMEO:
+Anghes be,
+B whorresin ss mys I ancher stou myor, ateld, d nindorond is fopeare stort an is HHcenghagown angeswoule he ou t wan teve aventan, y mthamalerrifo t therthe win moubor r --eaint Panke.
+s ar
