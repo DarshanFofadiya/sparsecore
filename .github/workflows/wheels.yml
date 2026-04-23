@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build wheel
-        uses: pypa/cibuildwheel@v2.21
+        uses: pypa/cibuildwheel@v2.22
         env:
           # Restrict cibuildwheel to the single target we want for this
           # matrix row. Otherwise it'd try to build all Python versions.

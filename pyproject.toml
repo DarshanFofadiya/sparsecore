@@ -135,7 +135,7 @@ before-build = [
 #      lookup resolves to the already-loaded torch libomp. One copy in
 #      the process. No collision.
 repair-wheel-command = [
-    "bash {project}/scripts/repair_wheel_macos.sh {wheel} {dest_dir} {delocate_archs}"
+    "bash {package}/scripts/repair_wheel_macos.sh {wheel} {dest_dir} {delocate_archs}"
 ]
 
 # ─── Linux-specific configuration ─────────────────────────────────
