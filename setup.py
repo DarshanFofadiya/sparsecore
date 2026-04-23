@@ -2,6 +2,7 @@
 import os
 import sys
 import platform
+import subprocess
 from setuptools import setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 
@@ -190,6 +191,135 @@ extra_link_args.extend(omp_link)
 
 
 # ─────────────────────────────────────────────────────────────────────
+# macOS libomp post-build repair.
+#
+# Our C++ extension links against Homebrew's libomp at an absolute
+# path: /opt/homebrew/opt/libomp/lib/libomp.dylib (arm64) or
+# /usr/local/opt/libomp/lib/libomp.dylib (x86_64 Intel Mac).
+#
+# At import time, torch has already loaded its OWN bundled libomp
+# (from torch/lib/libomp.dylib inside the torch wheel). If our .so
+# then loads a different libomp, OpenMP's runtime detects two
+# copies in the process and calls abort() with the infamous
+# "OMP: Error #15" message.
+#
+# The wheel build path solves this via scripts/repair_wheel_macos.sh
+# (post-build, invoked by cibuildwheel). Editable installs
+# (pip install -e .) skip that repair script and ship a .so with
+# the absolute libomp install name — which reliably aborts on
+# import as soon as torch is in the same process.
+#
+# BuildExtWithRepair runs the same two install_name_tool commands
+# the wheel repair script uses, but inline after each build_extension()
+# call. That way editable installs produce a correctly-linked .so on
+# the first try. Non-macOS platforms (where libgomp ships with gcc
+# and doesn't double-init) no-op this step.
+# ─────────────────────────────────────────────────────────────────────
+
+class BuildExtWithRepair(build_ext):
+    """pybind11 build_ext + post-build libomp repair on macOS."""
+
+    def build_extension(self, ext):
+        super().build_extension(ext)
+        if IS_MACOS:
+            self._repair_libomp_install_name(ext)
+
+    def _repair_libomp_install_name(self, ext):
+        """
+        Rewrite the built .so so its libomp reference uses @rpath and
+        a relative search path that points at torch's bundled libomp
+        at import time. See module-level comment above for the
+        motivation. No-op if the .so doesn't reference a Homebrew
+        libomp (e.g., SPARSECORE_NO_OPENMP builds).
+        """
+        so_path = self.get_ext_fullpath(ext.name)
+        if not os.path.isfile(so_path):
+            return
+
+        # Find the current libomp install name (if any). Absolute
+        # Homebrew paths will be rewritten; already-relative @rpath
+        # references are left alone.
+        otool_out = subprocess.run(
+            ["otool", "-L", so_path],
+            check=False, capture_output=True, text=True,
+        ).stdout
+        homebrew_libomp = None
+        for line in otool_out.splitlines():
+            line = line.strip()
+            # Match /opt/homebrew/opt/libomp/lib/libomp.dylib
+            # or    /usr/local/opt/libomp/lib/libomp.dylib
+            if line.startswith(("/opt/homebrew/opt/libomp/",
+                                "/usr/local/opt/libomp/")):
+                homebrew_libomp = line.split(" ")[0]
+                break
+
+        if homebrew_libomp is None:
+            return  # already @rpath-style, or no libomp linked
+
+        print(
+            f"[sparsecore] rewriting libomp install name: "
+            f"{homebrew_libomp} -> @rpath/libomp.dylib",
+            file=sys.stderr,
+        )
+        subprocess.run(
+            ["install_name_tool", "-change",
+             homebrew_libomp, "@rpath/libomp.dylib", so_path],
+            check=True,
+        )
+
+        # Add an rpath pointing at torch's bundled libomp, the one
+        # torch will have already loaded by the time we import.
+        #
+        # For WHEEL installs, sparsecore/_core.so and torch/ live
+        # next to each other inside site-packages, so the relative
+        # path @loader_path/../torch/lib resolves correctly. The
+        # wheel repair script (scripts/repair_wheel_macos.sh) uses
+        # that relative form and it's how CI-built wheels work in
+        # production.
+        #
+        # For EDITABLE installs (pip install -e .), the .so lives in
+        # the source tree (e.g. /path/to/repo/sparsecore/_core.so)
+        # while torch is in site-packages — they are NOT siblings,
+        # so @loader_path/../torch/lib resolves to a nonexistent
+        # directory. To keep editable installs working we also add
+        # an ABSOLUTE rpath pointing at torch/lib in the current
+        # Python environment. This absolute path is a
+        # development-only artifact: it's baked into your local .so
+        # and isn't a problem because the .so itself lives in your
+        # repo, not in a distributed wheel. Wheel builds still use
+        # scripts/repair_wheel_macos.sh, which actively strips
+        # absolute rpaths before publishing.
+        #
+        # We check each rpath before adding to avoid
+        # "file already has LC_RPATH for" errors on incremental builds.
+        otool_rpaths = subprocess.run(
+            ["otool", "-l", so_path],
+            check=False, capture_output=True, text=True,
+        ).stdout
+
+        rpaths_to_add = ["@loader_path/../torch/lib"]
+        try:
+            import torch  # type: ignore
+            torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
+            if os.path.isfile(os.path.join(torch_lib, "libomp.dylib")):
+                rpaths_to_add.append(torch_lib)
+        except ImportError:
+            pass
+
+        for want_rpath in rpaths_to_add:
+            if want_rpath not in otool_rpaths:
+                print(
+                    f"[sparsecore] adding rpath: {want_rpath}",
+                    file=sys.stderr,
+                )
+                subprocess.run(
+                    ["install_name_tool", "-add_rpath",
+                     want_rpath, so_path],
+                    check=True,
+                )
+
+
+# ─────────────────────────────────────────────────────────────────────
 # The C++ extension module.
 #
 # Name: "sparsecore._core"
@@ -239,5 +369,5 @@ ext_modules = [
 
 setup(
     ext_modules=ext_modules,
-    cmdclass={"build_ext": build_ext},
+    cmdclass={"build_ext": BuildExtWithRepair},
 )
