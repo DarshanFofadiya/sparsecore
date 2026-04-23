@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 import torch
 
-from sparsecore import PaddedCSR
+from sparselab import PaddedCSR
 
 
 # PyTorch's sparse_csr API emits a beta-state UserWarning. We know, we're using
@@ -257,7 +257,7 @@ def test_random_rejects_out_of_range_sparsity():
 def test_cpp_constructor_rejects_invariant_violation():
     """The C++ constructor validates and raises on invariant violations."""
     # Deliberately broken: values length 3 but col_indices length 2.
-    from sparsecore import _core
+    from sparselab import _core
     with pytest.raises(ValueError, match="Invariant 2 violated"):
         _core.PaddedCSR(
             nrows=2, ncols=3,
@@ -271,7 +271,7 @@ def test_cpp_constructor_rejects_invariant_violation():
 
 def test_cpp_constructor_rejects_unsorted_columns():
     """Live columns within a row must be sorted ascending."""
-    from sparsecore import _core
+    from sparselab import _core
     with pytest.raises(ValueError, match="sorted"):
         _core.PaddedCSR(
             nrows=1, ncols=5,
@@ -286,7 +286,7 @@ def test_cpp_constructor_rejects_unsorted_columns():
 
 def test_cpp_constructor_rejects_out_of_range_column():
     """col_indices[i] must be in [0, ncols)."""
-    from sparsecore import _core
+    from sparselab import _core
     with pytest.raises(ValueError, match="Invariant 6"):
         _core.PaddedCSR(
             nrows=1, ncols=3,

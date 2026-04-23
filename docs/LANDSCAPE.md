@@ -1,8 +1,8 @@
 # The Sparse Neural Network Landscape
 
-*A survey of what exists, what doesn't, and where SparseCore fits.*
+*A survey of what exists, what doesn't, and where SparseLab fits.*
 
-This document exists so that contributors, users, and skeptics can quickly understand why SparseCore was built and what it is not. **We read the landscape honestly.** Existing work is respected, credited, and positioned relative to our mission.
+This document exists so that contributors, users, and skeptics can quickly understand why SparseLab was built and what it is not. **We read the landscape honestly.** Existing work is respected, credited, and positioned relative to our mission.
 
 If you find this catalog incomplete or inaccurate, please open a PR. Keeping this document current is a first-class community responsibility.
 
@@ -15,9 +15,9 @@ We split the ecosystem along two axes:
 |                          | **Post-training (prune then deploy)** | **Training-from-scratch**     |
 | ------------------------ | ------------------------------------- | ----------------------------- |
 | **Structured sparsity**  | torchao, TensorRT, BLaST              | Condensed Sparsity, EcoSpa    |
-| **Unstructured sparsity**| SparseML, DeepSparse                  | rigl, rigl-torch, SparseCore  |
+| **Unstructured sparsity**| SparseML, DeepSparse                  | rigl, rigl-torch, SparseLab  |
 
-SparseCore lives in the bottom-right cell — **unstructured, training-from-scratch** — and this quadrant is the least served by production-quality tooling today.
+SparseLab lives in the bottom-right cell — **unstructured, training-from-scratch** — and this quadrant is the least served by production-quality tooling today.
 
 ---
 
@@ -34,7 +34,7 @@ SparseCore lives in the bottom-right cell — **unstructured, training-from-scra
 - **Repo:** [google-research/rigl](https://github.com/google-research/rigl)
 - **What it does:** Reference implementation of the RigL algorithm (Rigging the Lottery, ICML 2020). TensorFlow/JAX.
 - **Why it's not us:** Research artifact, not a library. Uses dense-mask simulation — measures what sparse training *could* do, not what it *costs*.
-- **What we learn from it:** The RigL algorithm itself. Our Router interface must express this cleanly so it plugs into SparseCore without rewriting.
+- **What we learn from it:** The RigL algorithm itself. Our Router interface must express this cleanly so it plugs into SparseLab without rewriting.
 
 ### rigl-torch
 - **Repo:** [nollied/rigl-torch](https://github.com/nollied/rigl-torch)
@@ -48,8 +48,8 @@ SparseCore lives in the bottom-right cell — **unstructured, training-from-scra
 - **Why it's not us (the subtle but important difference):** Cerebras stores weights *densely* and applies a binary mask before forward and after backward (from their docs: "mask tensor is multiplied inplace to the original dense parameter before forward and to the gradients after backward"). This is the correct choice for their wafer-scale chip, which schedules dense matmuls in SRAM extremely fast. **But it means their "sparsity" is simulated** — every forward pass still does the full dense matmul, every backward still allocates the full dense gradient. Memory and FLOPs are dense even when the math is zero.
 - **Why that matters for us:** On CPU hardware, the dense+mask approach is actively wrong. A 7B-parameter dense model needs ~14GB just to hold weights at float16 — impossible on a 32GB MacBook. At 90% sparsity with *true* sparse storage (what we build), that's ~1.4GB. The same approach that works for Cerebras on their own chip would make the library unusable on commodity hardware.
 - **What we adopt (with credit):** Their API is the industrial-quality reference. We will borrow the `SparsityAlgorithm` base class shape, their algorithm catalog, their per-parameter composability, and their schedule abstraction — see `borrow-dont-reinvent.md`. The credit will be explicit in docstrings.
-- **What we diverge on:** The storage substrate. Cerebras: dense tensor + binary mask (right for WSE). SparseCore: Padded-CSR genuinely sparse (right for CPU/MacBook).
-- **Positioning:** Cerebras and SparseCore are complementary, not competitive. A researcher prototypes a new DST algorithm on SparseCore on their laptop; when they're ready for a production run at 100B+ parameters, they deploy to Cerebras. We are the sandbox; they are the scale system.
+- **What we diverge on:** The storage substrate. Cerebras: dense tensor + binary mask (right for WSE). SparseLab: Padded-CSR genuinely sparse (right for CPU/MacBook).
+- **Positioning:** Cerebras and SparseLab are complementary, not competitive. A researcher prototypes a new DST algorithm on SparseLab on their laptop; when they're ready for a production run at 100B+ parameters, they deploy to Cerebras. We are the sandbox; they are the scale system.
 
 ### HuggingFace — pytorch_block_sparse
 - **Repo:** [huggingface/pytorch_block_sparse](https://github.com/huggingface/pytorch_block_sparse)
@@ -82,7 +82,7 @@ The sparse-transformer-pretraining space is unusually active. Papers published i
 - **Learned Shuffles for DST** ([arxiv:2510.14812](https://arxiv.org/html/2510.14812v1), October 2025)
 - **DST for Deep RL** ([arxiv:2510.12096](https://arxiv.org/html/2510.12096v1), October 2025)
 
-Each paper reinvents DST scaffolding from scratch. Most don't ship usable libraries. **SparseCore exists to break this reinvention loop** by providing the scaffolding every DST paper needs so researchers can focus on their algorithm, not their plumbing.
+Each paper reinvents DST scaffolding from scratch. Most don't ship usable libraries. **SparseLab exists to break this reinvention loop** by providing the scaffolding every DST paper needs so researchers can focus on their algorithm, not their plumbing.
 
 ---
 
@@ -95,7 +95,7 @@ Each paper reinvents DST scaffolding from scratch. Most don't ship usable librar
 
 ---
 
-## Where SparseCore Fits
+## Where SparseLab Fits
 
 Reading the landscape honestly:
 
@@ -113,11 +113,11 @@ Reading the landscape honestly:
 3. **Pluggable `SparsityAlgorithm` API** — RigL, SET, Sparse Momentum, and future papers can be expressed as short Python subclasses (typically ~50 lines of real logic, ~200 with docs). No C++ contributions required from users.
 4. **True sparse storage** — we don't compute dense gradients and mask them. We compute only what's needed. This is the actual FLOP and memory saving; the dense+mask approach that works on wafer-scale chips is actively the wrong choice on CPU.
 
-## SparseCore vs Cerebras — The One Table
+## SparseLab vs Cerebras — The One Table
 
 The most useful comparison for readers already familiar with Cerebras:
 
-| Dimension                      | Cerebras `cstorch.sparse`         | SparseCore                      |
+| Dimension                      | Cerebras `cstorch.sparse`         | SparseLab                      |
 | ------------------------------ | --------------------------------- | ------------------------------- |
 | Algorithm catalog              | Static, GMP, SET, RigL            | Static, SET, RigL (v0.1)        |
 | API design quality             | Production-hardened, composable   | We adopt theirs                 |
@@ -125,14 +125,14 @@ The most useful comparison for readers already familiar with Cerebras:
 | FLOPs at 90% sparsity          | 100% (mask after dense matmul)    | ~10% (only live connections)    |
 | Memory at 90% sparsity         | 100% (dense weight tensor)        | ~10% (sparse storage)           |
 | Target hardware                | Cerebras CS-2/CS-3 wafer          | Apple Silicon, ARM, x86         |
-| Installable on a MacBook       | No                                | `pip install sparsecore`        |
+| Installable on a MacBook       | No                                | `pip install sparselab`        |
 | Primary audience               | Customers with Cerebras contracts | Open-source research community  |
 
-**The mental model:** Cerebras is the right choice if you have a wafer and need to productionize a trained model. SparseCore is the right choice if you're a researcher iterating on a new DST algorithm on your laptop.
+**The mental model:** Cerebras is the right choice if you have a wafer and need to productionize a trained model. SparseLab is the right choice if you're a researcher iterating on a new DST algorithm on your laptop.
 
-## Why a Researcher in 2026 Chooses SparseCore
+## Why a Researcher in 2026 Chooses SparseLab
 
-SparseCore is a PyTorch-native, actually-sparse DST library. Write
+SparseLab is a PyTorch-native, actually-sparse DST library. Write
 your next drop/grow rule as a short `SparsityAlgorithm` subclass;
 it runs against real Padded-CSR storage and real sparse kernels, not
 a mask-on-dense simulation. Built CPU-first and Apple-Silicon-first,
@@ -177,7 +177,7 @@ The hypothesis (backed by the Lottery Ticket Hypothesis and Liu et al.
 dense at matched params because 512 sparse specialists can cover
 more hypothesis space than 51 dense generalists — even though both
 have the same FLOP budget. That hypothesis has good theoretical support
-but deserves a concrete SparseCore-native measurement before we rely
+but deserves a concrete SparseLab-native measurement before we rely
 on it in the launch blog.
 
 Estimated cost: ~10 minutes of wallclock (one extra training run of
@@ -194,7 +194,7 @@ a truth. Different layers probably want different sparsity levels
 (attention heads might want 50% sparsity; FFN blocks might want 95%).
 A fixed-budget approach can't discover this.
 
-A natural SparseCore-native variant: at each update, drop
+A natural SparseLab-native variant: at each update, drop
 low-magnitude weights as usual, but **grow every position where
 |dL/dW| exceeds a learned or scheduled threshold**, rather than a
 fixed top-K. Let `nnz` drift up when the loss landscape asks for

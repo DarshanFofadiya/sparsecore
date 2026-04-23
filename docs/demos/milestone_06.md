@@ -25,7 +25,7 @@ Build-system changes: `setup.py` now probes for `libomp` and wires it
 in. On macOS we prefer PyTorch's bundled `libomp.dylib` (rpath'd into
 torch's lib directory) to avoid the double-runtime abort that happens
 if two separate OpenMP libraries load into the same process. Fallback
-is Homebrew's libomp for standalone builds. `SPARSECORE_NO_OPENMP=1`
+is Homebrew's libomp for standalone builds. `SPARSELAB_NO_OPENMP=1`
 disables the whole thing for CI or debugging.
 
 ## The speedup, measured

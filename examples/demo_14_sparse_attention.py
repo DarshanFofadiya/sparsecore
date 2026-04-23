@@ -22,7 +22,7 @@ How to run
 ──────────
     python examples/demo_14_sparse_attention.py
 
-Needs: pip install sparsecore[demos]
+Needs: pip install sparselab[demos]
 
 Runtime: ~10 min on M3 Pro (4 paths × ~2 min each).
 
@@ -49,9 +49,9 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
+import sparselab
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -116,7 +116,7 @@ def make_linear(in_f: int, out_f: int, sparsity: float, bias: bool = False):
     """Factory: dense nn.Linear if sparsity==0, else SparseLinear."""
     if sparsity <= 0.0:
         return nn.Linear(in_f, out_f, bias=bias)
-    return sparsecore.SparseLinear(in_f, out_f, sparsity=sparsity, bias=bias)
+    return sparselab.SparseLinear(in_f, out_f, sparsity=sparsity, bias=bias)
 
 
 class CausalSelfAttention(nn.Module):
@@ -196,7 +196,7 @@ def count_params(model):
     dense = 0
     sparse_live = 0
     for mod in model.modules():
-        if isinstance(mod, sparsecore.SparseLinear):
+        if isinstance(mod, sparselab.SparseLinear):
             sparse_live += mod.nnz
         else:
             for p in mod.parameters(recurse=False):
@@ -327,7 +327,7 @@ def plot_all(results, out_path):
 
 
 def main():
-    print("\nSparseCore demo 14 — sparse attention experiment")
+    print("\nSparseLab demo 14 — sparse attention experiment")
     print(f"  Arch: {N_LAYERS}L x d_model={D_MODEL} x d_ff={D_FF} x "
           f"heads={N_HEADS} x seq_len={SEQ_LEN}")
     print(f"  Training: {N_STEPS} steps, batch={BATCH_SIZE}, lr={LR}")

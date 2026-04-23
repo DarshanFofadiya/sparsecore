@@ -3,7 +3,7 @@
 ## What ships
 
 - **PaddedCSR** (3a–3b): sparse matrix format with per-row padding for O(1) insertion during future topology mutation
-- **`sparsecore.spmm(W, X)`** (3c–3d): forward-pass Y = W @ X with a scalar reference + NEON SIMD implementation
+- **`sparselab.spmm(W, X)`** (3c–3d): forward-pass Y = W @ X with a scalar reference + NEON SIMD implementation
 - **198 passing tests** including 43 NEON-specific correctness tests covering all 4 tail residues, empty rows, padding slots, and extreme values
 
 ## Demo to run
@@ -120,7 +120,7 @@ this comparison, not our best. That's a strong talking point.
 
 - Run with larger `N` (`N = 2048`) — wider activations amortize
   overhead better, crossover holds at ~99% on Apple Silicon
-- Force scalar vs SIMD: `sparsecore.spmm(W, X, kernel="scalar"|"simd")`
+- Force scalar vs SIMD: `sparselab.spmm(W, X, kernel="scalar"|"simd")`
 - Inspect assembly: `clang++ -O3 -std=c++17 -mcpu=apple-m1 -S
   csrc/kernels/spmm.cpp -Icsrc | grep fmla`
 
@@ -131,6 +131,6 @@ this comparison, not our best. That's a strong talking point.
 
 ## What's next (Milestone 4a)
 
-Add autograd support: `torch.autograd.Function` so `sparsecore.spmm`
+Add autograd support: `torch.autograd.Function` so `sparselab.spmm`
 participates in backprop. Without this, users can only run forward
 passes — no training. That's the next required piece.

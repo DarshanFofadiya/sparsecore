@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-SparseCore smoke test — verifies a fresh install works end-to-end.
+SparseLab smoke test — verifies a fresh install works end-to-end.
 
 Used by:
   - cibuildwheel to validate each built wheel in its own environment
   - Fresh-machine manual verification (Docker, SageMaker, Colab)
-  - Anyone who just installed sparsecore and wants to sanity check
+  - Anyone who just installed sparselab and wants to sanity check
 
 What this checks:
-  1. sparsecore imports without error
+  1. sparselab imports without error
   2. Version string is non-empty
   3. PaddedCSR round-trips correctly (dense → sparse → dense identity)
   4. spmm produces numerically correct output vs a dense reference
@@ -47,11 +47,11 @@ def check(label: str, cond: bool) -> None:
 
 def main() -> int:
     section("1. Import")
-    import sparsecore
+    import sparselab
     import torch
-    check("sparsecore imported", hasattr(sparsecore, "__version__"))
-    check(f"version string present ({sparsecore.__version__})",
-          bool(sparsecore.__version__))
+    check("sparselab imported", hasattr(sparselab, "__version__"))
+    check(f"version string present ({sparselab.__version__})",
+          bool(sparselab.__version__))
     check("torch imported", hasattr(torch, "__version__"))
 
     section("2. PaddedCSR round-trip")
@@ -63,7 +63,7 @@ def main() -> int:
          [0.2, 0.7, 0.0, 0.4]],
         dtype=torch.float32,
     )
-    W_csr = sparsecore.PaddedCSR.from_dense(W_dense)
+    W_csr = sparselab.PaddedCSR.from_dense(W_dense)
     W_rt = W_csr.to_dense()
     check("shape preserved", W_rt.shape == W_dense.shape)
     check("values preserved exactly", torch.equal(W_rt, W_dense))
@@ -71,9 +71,9 @@ def main() -> int:
 
     section("3. SpMM vs dense reference")
     torch.manual_seed(0)
-    W = sparsecore.PaddedCSR.random(64, 32, sparsity=0.8, seed=42)
+    W = sparselab.PaddedCSR.random(64, 32, sparsity=0.8, seed=42)
     X = torch.randn(32, 16)
-    Y_sparse = sparsecore.spmm(W, X)
+    Y_sparse = sparselab.spmm(W, X)
     Y_ref = W.to_dense() @ X
     max_diff = (Y_sparse - Y_ref).abs().max().item()
     check(f"forward matches dense (max |diff| = {max_diff:.2e})",
@@ -81,7 +81,7 @@ def main() -> int:
 
     section("4. Autograd backward")
     X_grad = torch.randn(32, 16, requires_grad=True)
-    Y = sparsecore.spmm(W, X_grad)
+    Y = sparselab.spmm(W, X_grad)
     loss = Y.sum()
     loss.backward()
     check("X received a gradient", X_grad.grad is not None)
@@ -89,7 +89,7 @@ def main() -> int:
 
     section("5. SparseLinear inside nn.Module")
     model = torch.nn.Sequential(
-        sparsecore.SparseLinear(32, 64, sparsity=0.9),
+        sparselab.SparseLinear(32, 64, sparsity=0.9),
         torch.nn.ReLU(),
         torch.nn.Linear(64, 8),
     )
@@ -105,7 +105,7 @@ def main() -> int:
     check("training step completed without error", True)
 
     section("6. SparsityAlgorithm attachment")
-    algo = sparsecore.SET(sparsity=0.9, drop_fraction=0.3, update_freq=5)
+    algo = sparselab.SET(sparsity=0.9, drop_fraction=0.3, update_freq=5)
     model.apply(algo)
     check("algorithm attached", len(algo.layers) == 1)
     # Run a few steps so SET actually fires at least once.

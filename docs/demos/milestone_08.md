@@ -2,7 +2,7 @@
 
 ## What landed
 
-First real DST algorithm. `sparsecore.SET` is a subclass of
+First real DST algorithm. `sparselab.SET` is a subclass of
 `DynamicSparsityAlgorithm` that mutates the topology of attached
 `SparseLinear` layers every N training steps:
 
@@ -18,9 +18,9 @@ can shape.
 ### User API
 
 ```python
-layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
 
-algo = sparsecore.SET(
+algo = sparselab.SET(
     sparsity=0.9,
     drop_fraction=0.3,    # churn 30% of live weights per update
     update_freq=100,       # update every 100 training steps
@@ -40,7 +40,7 @@ for x, y in loader:
 |------|------|-------|
 | `csrc/kernels/padded_csr.{hpp,cpp}` | `rewrite_row` mutation primitive | +80 |
 | `csrc/bindings.cpp` | pybind11 binding for `rewrite_row` | +40 |
-| `sparsecore/router.py` | `DynamicSparsityAlgorithm` + `SET` | +170 |
+| `sparselab/router.py` | `DynamicSparsityAlgorithm` + `SET` | +170 |
 | `tests/test_padded_csr_rewrite.py` | 12 tests for `rewrite_row` | +180 |
 | `tests/test_set.py` | 13 tests for SET + base class | +230 |
 | `examples/demo_10_set_vs_static.py` | End-to-end comparison on MNIST | +200 |

@@ -24,7 +24,7 @@ at 40% of dense memory).
 
 How to run
 ──────────
-    pip install sparsecore[demos]
+    pip install sparselab[demos]
     python examples/demo_15_mini_gpt.py              # 5000 steps, ~75 min
     python examples/demo_15_mini_gpt.py --steps 10000  # 10000 steps, ~2.5 hr
 
@@ -55,9 +55,9 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
+import sparselab
 
 
 # ─── Configuration ───────────────────────────────────────────────────
@@ -116,14 +116,14 @@ def get_batch(ids: torch.Tensor, batch_size: int, seq_len: int):
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Model — switches between dense nn.Linear and sparsecore.SparseLinear
+#  Model — switches between dense nn.Linear and sparselab.SparseLinear
 # ─────────────────────────────────────────────────────────────────────
 
 class CausalSelfAttention(nn.Module):
     """Multi-head causal self-attention.
 
     ``attn_sparsity`` controls whether the qkv and o projections use
-    dense ``nn.Linear`` (attn_sparsity=0) or ``sparsecore.SparseLinear``
+    dense ``nn.Linear`` (attn_sparsity=0) or ``sparselab.SparseLinear``
     at the given sparsity level (attn_sparsity>0). The attention math
     itself (the softmax and the scaled-dot-product) is always dense —
     we only sparsify the projection weights, not the attention pattern.
@@ -133,9 +133,9 @@ class CausalSelfAttention(nn.Module):
         self.n_heads = n_heads
         self.d_head = d_model // n_heads
         if attn_sparsity > 0:
-            self.qkv = sparsecore.SparseLinear(
+            self.qkv = sparselab.SparseLinear(
                 d_model, 3 * d_model, sparsity=attn_sparsity, bias=False)
-            self.o = sparsecore.SparseLinear(
+            self.o = sparselab.SparseLinear(
                 d_model, d_model, sparsity=attn_sparsity, bias=False)
         else:
             self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
@@ -165,9 +165,9 @@ class SparseFFN(nn.Module):
     """The only line that changes — SparseLinear instead of nn.Linear."""
     def __init__(self, d_model, d_ff, sparsity):
         super().__init__()
-        self.fc_up = sparsecore.SparseLinear(d_model, d_ff,
+        self.fc_up = sparselab.SparseLinear(d_model, d_ff,
                                                sparsity=sparsity, bias=False)
-        self.fc_down = sparsecore.SparseLinear(d_ff, d_model,
+        self.fc_down = sparselab.SparseLinear(d_ff, d_model,
                                                  sparsity=sparsity, bias=False)
     def forward(self, x):
         return self.fc_down(F.gelu(self.fc_up(x)))
@@ -176,7 +176,7 @@ class SparseFFN(nn.Module):
 class Block(nn.Module):
     """One transformer block. ``ffn_sparsity`` and ``attn_sparsity``
     control whether the FFN / attention projections are sparse. Any
-    value > 0 swaps in ``sparsecore.SparseLinear`` at that sparsity."""
+    value > 0 swaps in ``sparselab.SparseLinear`` at that sparsity."""
     def __init__(self, d_model, d_ff, n_heads,
                  ffn_sparsity: float, attn_sparsity: float):
         super().__init__()
@@ -244,7 +244,7 @@ def count_params(model):
     sparse_live = 0
     sparse_capacity = 0
     for m in model.modules():
-        if isinstance(m, sparsecore.SparseLinear):
+        if isinstance(m, sparselab.SparseLinear):
             sparse_live += m.nnz
             # total_capacity = nnz + padding slots. Reflects the actual
             # allocated backing array size.
@@ -501,7 +501,7 @@ PATH_CONFIGS = {
 def main():
     # ─── CLI ──────────────────────────────────────────────────────────
     parser = argparse.ArgumentParser(
-        description="Mini-GPT on Tiny Shakespeare — SparseCore launch demo."
+        description="Mini-GPT on Tiny Shakespeare — SparseLab launch demo."
     )
     parser.add_argument(
         "--steps", type=int, default=DEFAULT_N_STEPS,
@@ -538,7 +538,7 @@ def main():
             )
 
     start_wallclock = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print("SparseCore demo 15 — Mini GPT on Tiny Shakespeare")
+    print("SparseLab demo 15 — Mini GPT on Tiny Shakespeare")
     print(f"  Started: {start_wallclock}")
     print(f"  Arch: {N_LAYERS}L × d_model={D_MODEL} × d_ff={D_FF} × "
           f"heads={N_HEADS} × seq={SEQ_LEN}")

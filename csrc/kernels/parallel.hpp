@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  kernels/parallel.hpp
 //
-//  Compile-time OpenMP shim for SparseCore kernels.
+//  Compile-time OpenMP shim for SparseLab kernels.
 //
 //  Rationale
 //  ─────────

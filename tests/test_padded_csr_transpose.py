@@ -25,8 +25,8 @@ import numpy as np
 import pytest
 import torch
 
-import sparsecore
-from sparsecore import PaddedCSR
+import sparselab
+from sparselab import PaddedCSR
 
 
 @pytest.fixture(autouse=True)
@@ -202,7 +202,7 @@ def test_transpose_enables_wt_matmul_y():
     WT = W_csr.transpose()
 
     # Our path: spmm(Wᵀ, dY)
-    dX_ours = sparsecore.spmm(WT, dY)
+    dX_ours = sparselab.spmm(WT, dY)
     # Oracle path: dense W.T @ dY
     dX_oracle = W_dense.T @ dY
 

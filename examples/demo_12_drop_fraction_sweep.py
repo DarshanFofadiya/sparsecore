@@ -16,7 +16,7 @@ How to run
 ──────────
     python examples/demo_12_drop_fraction_sweep.py
 
-Needs: pip install sparsecore[demos]
+Needs: pip install sparselab[demos]
 
 Runtime: ~10-12 minutes on M3 Pro (7 training runs).
 
@@ -45,14 +45,14 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
 try:
     from torchvision import datasets, transforms
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
+import sparselab
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -84,7 +84,7 @@ def load_mnist():
 
 def build_model():
     torch.manual_seed(0)
-    fc1 = sparsecore.SparseLinear(784, HIDDEN, sparsity=SPARSITY, bias=False)
+    fc1 = sparselab.SparseLinear(784, HIDDEN, sparsity=SPARSITY, bias=False)
     fc2 = nn.Linear(HIDDEN, 10, bias=False)
     return fc1, fc2
 
@@ -172,7 +172,7 @@ def plot_all(results, out_path):
 
 
 def main():
-    print(f"\nSparseCore demo 12 — drop-fraction sweep at {SPARSITY*100:.0f}% sparsity")
+    print(f"\nSparseLab demo 12 — drop-fraction sweep at {SPARSITY*100:.0f}% sparsity")
     print(f"HIDDEN={HIDDEN}  EPOCHS={EPOCHS}  BATCH={BATCH_SIZE}  LR={LR}  "
           f"UPDATE_FREQ={UPDATE_FREQ}")
     print(f"DROP_FRACTIONS: {DROP_FRACTIONS}")
@@ -184,13 +184,13 @@ def main():
 
     # Baseline: Static
     results.append(train_one_path(
-        "Static", sparsecore.Static(sparsity=SPARSITY),
+        "Static", sparselab.Static(sparsity=SPARSITY),
         train_loader, test_loader,
     ))
 
     # SET across drop_fractions
     for df in DROP_FRACTIONS:
-        algo = sparsecore.SET(
+        algo = sparselab.SET(
             sparsity=SPARSITY, drop_fraction=df,
             update_freq=UPDATE_FREQ, seed=42,
         )
@@ -198,7 +198,7 @@ def main():
 
     # RigL across drop_fractions
     for df in DROP_FRACTIONS:
-        algo = sparsecore.RigL(
+        algo = sparselab.RigL(
             sparsity=SPARSITY, drop_fraction=df,
             update_freq=UPDATE_FREQ, seed=42,
         )

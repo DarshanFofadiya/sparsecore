@@ -41,7 +41,7 @@
 #endif
 
 
-namespace sparsecore {
+namespace sparselab {
 
 void spmm_simd_neon(
     const PaddedCSR& W,
@@ -171,4 +171,4 @@ void spmm_simd_neon(
     }
 }
 
-}  // namespace sparsecore
+}  // namespace sparselab

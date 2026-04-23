@@ -2,7 +2,7 @@
 Demo 13 — Tiny transformer training on Tiny Shakespeare (milestone 4g).
 
 THE LAUNCH DEMO. A 2-layer decoder-only transformer trained from
-scratch on Tiny Shakespeare, with sparse FFN layers via SparseCore.
+scratch on Tiny Shakespeare, with sparse FFN layers via SparseLab.
 Compares three paths side-by-side:
 
   - Dense:            vanilla nn.Linear FFN (baseline, ~285k params)
@@ -17,7 +17,7 @@ How to run
 ──────────
     python examples/demo_13_tiny_transformer.py
 
-Needs: pip install sparsecore[demos]
+Needs: pip install sparselab[demos]
 
 Runtime: ~20 minutes on M3 Pro (3 paths × ~7 min each).
 
@@ -48,9 +48,9 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
+import sparselab
 
 
 # ─── Config ──────────────────────────────────────────────────────────
@@ -154,9 +154,9 @@ class DenseFFN(nn.Module):
 class SparseFFN(nn.Module):
     def __init__(self, d_model: int, d_ff: int, sparsity: float):
         super().__init__()
-        self.fc_up = sparsecore.SparseLinear(d_model, d_ff,
+        self.fc_up = sparselab.SparseLinear(d_model, d_ff,
                                                sparsity=sparsity, bias=False)
-        self.fc_down = sparsecore.SparseLinear(d_ff, d_model,
+        self.fc_down = sparselab.SparseLinear(d_ff, d_model,
                                                  sparsity=sparsity, bias=False)
 
     def forward(self, x):
@@ -225,7 +225,7 @@ def count_model_params(model):
     dense_params = 0
     sparse_live = 0
     for mod in model.modules():
-        if isinstance(mod, sparsecore.SparseLinear):
+        if isinstance(mod, sparselab.SparseLinear):
             sparse_live += mod.nnz
         else:
             for p in mod.parameters(recurse=False):
@@ -423,7 +423,7 @@ def plot_loss_curves(results, out_path):
 # ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print("\nSparseCore demo 13 — Tiny Transformer on Tiny Shakespeare")
+    print("\nSparseLab demo 13 — Tiny Transformer on Tiny Shakespeare")
     print(f"  Arch: {N_LAYERS}L x d_model={D_MODEL} x d_ff={D_FF} x "
           f"heads={N_HEADS} x seq_len={SEQ_LEN}")
     print(f"  Train: {N_STEPS} steps, batch={BATCH_SIZE}, lr={LR}, "
@@ -469,7 +469,7 @@ def main():
     )
     r_static = train_one_path(
         "Sparse+Static", sparse_static_model,
-        sparsecore.Static(sparsity=SPARSITY),
+        sparselab.Static(sparsity=SPARSITY),
         train_ids, val_ids, itos, samples_path,
     )
 
@@ -483,7 +483,7 @@ def main():
     )
     r_set = train_one_path(
         "Sparse+SET(0.1)", sparse_set_model,
-        sparsecore.SET(sparsity=SPARSITY, drop_fraction=0.1,
+        sparselab.SET(sparsity=SPARSITY, drop_fraction=0.1,
                          update_freq=100, seed=42),
         train_ids, val_ids, itos, samples_path,
     )

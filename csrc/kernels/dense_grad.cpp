@@ -19,7 +19,7 @@
 #include <stdexcept>    // std::invalid_argument
 
 
-namespace sparsecore {
+namespace sparselab {
 
 void dense_grad(
     int64_t M, int64_t K, int64_t N,
@@ -83,4 +83,4 @@ void dense_grad(
     }
 }
 
-}  // namespace sparsecore
+}  // namespace sparselab

@@ -27,7 +27,7 @@
 #include "padded_csr.hpp"
 
 
-namespace sparsecore {
+namespace sparselab {
 
 void spmm_simd_neon(
     const PaddedCSR& W,
@@ -35,4 +35,4 @@ void spmm_simd_neon(
     float* Y
 );
 
-}  // namespace sparsecore
+}  // namespace sparselab

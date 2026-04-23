@@ -23,7 +23,7 @@
 #include <cstddef>
 
 
-namespace sparsecore {
+namespace sparselab {
 
 // ─────────────────────────────────────────────────────────────────────────
 //  vector_dot_simd_neon
@@ -41,4 +41,4 @@ namespace sparsecore {
 // ─────────────────────────────────────────────────────────────────────────
 float vector_dot_simd_neon(const float* a, const float* b, std::size_t n);
 
-}  // namespace sparsecore
+}  // namespace sparselab

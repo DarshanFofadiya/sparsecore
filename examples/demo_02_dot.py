@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-SparseCore Milestone 2: NEON SIMD Vector Dot — Benchmark Demo
+SparseLab Milestone 2: NEON SIMD Vector Dot — Benchmark Demo
 ═══════════════════════════════════════════════════════════════════════════
 
 This is the first demo that measures real performance, not just correctness.
 It runs three implementations of vector dot product across a range of sizes:
 
-    1. sparsecore.vector_dot        — our scalar reference kernel
-    2. sparsecore.vector_dot_simd   — our NEON 128-bit SIMD kernel
+    1. sparselab.vector_dot        — our scalar reference kernel
+    2. sparselab.vector_dot_simd   — our NEON 128-bit SIMD kernel
     3. torch.dot                    — Apple Accelerate via PyTorch
 
 What to expect:
@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from sparsecore import _core
+from sparselab import _core
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ def verify_correctness(n: int = 131_072):
 def print_header():
     print()
     print("╔══════════════════════════════════════════════════════════════════╗")
-    print("║   SparseCore — Milestone 2: NEON SIMD Vector Dot                 ║")
+    print("║   SparseLab — Milestone 2: NEON SIMD Vector Dot                 ║")
     print("╠══════════════════════════════════════════════════════════════════╣")
     so_path = Path(_core.__file__)
     so_rel = str(so_path).replace(str(Path.home()), "~")

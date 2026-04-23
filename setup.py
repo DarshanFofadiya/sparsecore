@@ -1,4 +1,4 @@
-"""SparseCore build script."""
+"""SparseLab build script."""
 import os
 import sys
 import platform
@@ -68,12 +68,12 @@ extra_link_args: list[str] = []
 #
 # On Linux, gcc/clang typically support `-fopenmp` directly. We try
 # that unconditionally; if the user's compiler doesn't know the flag
-# the build fails loudly (they can override via SPARSECORE_NO_OPENMP=1).
+# the build fails loudly (they can override via SPARSELAB_NO_OPENMP=1).
 #
 # Environment overrides:
-#   SPARSECORE_NO_OPENMP=1      → force-disable (useful for CI or
+#   SPARSELAB_NO_OPENMP=1      → force-disable (useful for CI or
 #                                 debugging a non-OpenMP build)
-#   SPARSECORE_LIBOMP_PREFIX=/…  → point at a custom libomp install
+#   SPARSELAB_LIBOMP_PREFIX=/…  → point at a custom libomp install
 # ─────────────────────────────────────────────────────────────────────
 
 def configure_openmp() -> tuple[list[str], list[str], list[str]]:
@@ -93,14 +93,14 @@ def configure_openmp() -> tuple[list[str], list[str], list[str]]:
       2. If PyTorch isn't importable at build time, fall back to
          Homebrew's libomp directly.
     """
-    if os.environ.get("SPARSECORE_NO_OPENMP") == "1":
+    if os.environ.get("SPARSELAB_NO_OPENMP") == "1":
         return [], [], []
 
     if IS_MACOS:
         # Headers only come from Homebrew (PyTorch's wheel doesn't ship
         # the omp.h development header, only the runtime .dylib).
         include_candidates = [
-            os.environ.get("SPARSECORE_LIBOMP_PREFIX"),
+            os.environ.get("SPARSELAB_LIBOMP_PREFIX"),
             "/opt/homebrew/opt/libomp",
             "/usr/local/opt/libomp",
         ]
@@ -114,7 +114,7 @@ def configure_openmp() -> tuple[list[str], list[str], list[str]]:
             msg = (
                 "\n"
                 "══════════════════════════════════════════════════════════════════\n"
-                "  sparsecore: libomp NOT FOUND — building WITHOUT OpenMP.\n"
+                "  sparselab: libomp NOT FOUND — building WITHOUT OpenMP.\n"
                 "  The kernels will run SEQUENTIALLY (roughly 4-6x slower\n"
                 "  on an Apple Silicon Mac with >=4 cores).\n"
                 "\n"
@@ -126,7 +126,7 @@ def configure_openmp() -> tuple[list[str], list[str], list[str]]:
                 "    pip install -e . --no-build-isolation --no-deps --force-reinstall\n"
                 "\n"
                 "  To silence this warning intentionally, set:\n"
-                "    SPARSECORE_NO_OPENMP=1\n"
+                "    SPARSELAB_NO_OPENMP=1\n"
                 "══════════════════════════════════════════════════════════════════\n"
             )
             print(msg, file=sys.stderr)
@@ -137,8 +137,8 @@ def configure_openmp() -> tuple[list[str], list[str], list[str]]:
         # dynamic loader where to search at runtime.
         #
         # We always add Homebrew's libomp prefix as a FALLBACK rpath
-        # too. That way, if a user somehow imports sparsecore without
-        # torch first (unusual — sparsecore always imports torch in
+        # too. That way, if a user somehow imports sparselab without
+        # torch first (unusual — sparselab always imports torch in
         # its __init__), the dynamic loader still finds a libomp.
         #
         # include_path here is "<homebrew-prefix>/libomp/include"
@@ -230,7 +230,7 @@ class BuildExtWithRepair(build_ext):
         a relative search path that points at torch's bundled libomp
         at import time. See module-level comment above for the
         motivation. No-op if the .so doesn't reference a Homebrew
-        libomp (e.g., SPARSECORE_NO_OPENMP builds).
+        libomp (e.g., SPARSELAB_NO_OPENMP builds).
         """
         so_path = self.get_ext_fullpath(ext.name)
         if not os.path.isfile(so_path):
@@ -257,7 +257,7 @@ class BuildExtWithRepair(build_ext):
             return  # already @rpath-style, or no libomp linked
 
         print(
-            f"[sparsecore] rewriting libomp install name: "
+            f"[sparselab] rewriting libomp install name: "
             f"{homebrew_libomp} -> @rpath/libomp.dylib",
             file=sys.stderr,
         )
@@ -270,7 +270,7 @@ class BuildExtWithRepair(build_ext):
         # Add an rpath pointing at torch's bundled libomp, the one
         # torch will have already loaded by the time we import.
         #
-        # For WHEEL installs, sparsecore/_core.so and torch/ live
+        # For WHEEL installs, sparselab/_core.so and torch/ live
         # next to each other inside site-packages, so the relative
         # path @loader_path/../torch/lib resolves correctly. The
         # wheel repair script (scripts/repair_wheel_macos.sh) uses
@@ -278,7 +278,7 @@ class BuildExtWithRepair(build_ext):
         # production.
         #
         # For EDITABLE installs (pip install -e .), the .so lives in
-        # the source tree (e.g. /path/to/repo/sparsecore/_core.so)
+        # the source tree (e.g. /path/to/repo/sparselab/_core.so)
         # while torch is in site-packages — they are NOT siblings,
         # so @loader_path/../torch/lib resolves to a nonexistent
         # directory. To keep editable installs working we also add
@@ -309,7 +309,7 @@ class BuildExtWithRepair(build_ext):
         for want_rpath in rpaths_to_add:
             if want_rpath not in otool_rpaths:
                 print(
-                    f"[sparsecore] adding rpath: {want_rpath}",
+                    f"[sparselab] adding rpath: {want_rpath}",
                     file=sys.stderr,
                 )
                 subprocess.run(
@@ -322,11 +322,11 @@ class BuildExtWithRepair(build_ext):
 # ─────────────────────────────────────────────────────────────────────
 # The C++ extension module.
 #
-# Name: "sparsecore._core"
+# Name: "sparselab._core"
 #   The dotted name means: produce a .so file importable as
-#   `sparsecore._core`. It physically lives at sparsecore/_core.so after
+#   `sparselab._core`. It physically lives at sparselab/_core.so after
 #   install. The leading underscore marks it as private — users import
-#   from `sparsecore`, not from `sparsecore._core`.
+#   from `sparselab`, not from `sparselab._core`.
 #
 # Sources: list the .cpp files to compile. Milestone 1c declares the
 #   build machinery without any sources yet; Milestone 1d will add
@@ -335,7 +335,7 @@ class BuildExtWithRepair(build_ext):
 
 ext_modules = [
     Pybind11Extension(
-        name="sparsecore._core",
+        name="sparselab._core",
         # All C++ sources that need to be compiled and linked together.
         # Kernels go in csrc/kernels/*; bindings.cpp is the pybind11 entry point.
         #

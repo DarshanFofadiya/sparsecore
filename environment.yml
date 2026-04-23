@@ -1,12 +1,12 @@
-# SparseCore development environment
+# SparseLab development environment
 #
-# This is the canonical environment spec for SparseCore. It is the only
+# This is the canonical environment spec for SparseLab. It is the only
 # supported way to set up a development environment.
 #
 # To (re)create:
-#     conda env remove -n sparsecore -y       # if it already exists
+#     conda env remove -n sparselab -y       # if it already exists
 #     conda env create -f environment.yml
-#     conda activate sparsecore
+#     conda activate sparselab
 #
 # Pre-requisites NOT managed by this file:
 #
@@ -28,7 +28,7 @@
 #     which keeps our C++ extension binary-compatible across future releases.
 #     No upper bound is pinned — we want to follow PyTorch forward, not freeze.
 
-name: sparsecore
+name: sparselab
 
 channels:
   - conda-forge

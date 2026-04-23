@@ -16,7 +16,7 @@
 #include "padded_csr.hpp"
 
 
-namespace sparsecore {
+namespace sparselab {
 
 // ─────────────────────────────────────────────────────────────────────────
 //  spmm_scalar — scalar reference implementation of Y = W @ X.
@@ -50,4 +50,4 @@ void spmm_scalar(
     float* Y
 );
 
-}  // namespace sparsecore
+}  // namespace sparselab

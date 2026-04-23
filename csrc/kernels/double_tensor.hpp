@@ -13,7 +13,7 @@
 #include <cstddef>  // for std::size_t
 
 
-namespace sparsecore {
+namespace sparselab {
 
 // ─────────────────────────────────────────────────────────────────────────
 //  double_tensor_scalar
@@ -31,4 +31,4 @@ namespace sparsecore {
 // ─────────────────────────────────────────────────────────────────────────
 void double_tensor_scalar(const float* input, float* output, std::size_t n);
 
-}  // namespace sparsecore
+}  // namespace sparselab

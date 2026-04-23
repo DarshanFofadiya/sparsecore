@@ -4,13 +4,13 @@
 
 Two things:
 
-1. **`sparsecore.RigL`** — the third sparsity algorithm in the Router API.
+1. **`sparselab.RigL`** — the third sparsity algorithm in the Router API.
    Uses the dense gradient to decide where to grow new connections
    instead of random choice. Cerebras-compatible API:
 
 ```python
-layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
-algo = sparsecore.RigL(
+layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
+algo = sparselab.RigL(
     sparsity=0.9,
     drop_fraction=0.3,
     update_freq=100,
@@ -20,7 +20,7 @@ layer.apply(algo)
 # ... training loop identical to Static / SET, just swap the algorithm.
 ```
 
-2. **`sparsecore._core.dense_grad`** — a new C++ kernel computing
+2. **`sparselab._core.dense_grad`** — a new C++ kernel computing
    `G = dY @ X^T`, the full dense gradient at every (row, col)
    including currently-dead positions. Used by RigL (and any future
    gradient-aware DST algorithm) to find top-K grow candidates.
@@ -167,6 +167,6 @@ Scope:
 
 This is the task where DST is *supposed* to work. If RigL's advantage
 appears at transformer scale, our launch narrative has a real result
-to point at: "SparseCore's RigL matches dense accuracy at 90%
+to point at: "SparseLab's RigL matches dense accuracy at 90%
 sparsity on a character-level transformer, with [specific memory/time
 numbers]."

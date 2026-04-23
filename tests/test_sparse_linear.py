@@ -1,5 +1,5 @@
 """
-Tests for sparsecore.SparseLinear (Milestone 4b).
+Tests for sparselab.SparseLinear (Milestone 4b).
 
 The class is pure plumbing on top of _SpMMFunction (tested in
 test_spmm_autograd.py) so these tests focus on the integration
@@ -23,8 +23,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-import sparsecore
-from sparsecore import SparseLinear
+import sparselab
+from sparselab import SparseLinear
 
 
 # ─────────────────────────────────────────────────────────────────────

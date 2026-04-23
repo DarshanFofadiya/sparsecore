@@ -14,7 +14,7 @@
 ## How to run it
 
 ```bash
-conda activate sparsecore
+conda activate sparselab
 python examples/demo_02_dot.py
 ```
 

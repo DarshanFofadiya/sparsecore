@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-SparseCore Milestone 1: The PyTorch Bridge — Live Demo
+SparseLab Milestone 1: The PyTorch Bridge — Live Demo
 ═══════════════════════════════════════════════════════════════════════════
 
-This is the first SparseCore demo. It does something trivial on the surface
+This is the first SparseLab demo. It does something trivial on the surface
 (multiply a tensor by 2) but proves something important underneath:
 
     Python can call C++ code we wrote, and PyTorch tensors flow through
@@ -22,7 +22,7 @@ from pathlib import Path
 
 import torch
 
-from sparsecore import _core
+from sparselab import _core
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ from sparsecore import _core
 BANNER = """
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║                                                                           ║
-║     SparseCore — Milestone 1: The PyTorch Bridge                          ║
+║     SparseLab — Milestone 1: The PyTorch Bridge                          ║
 ║                                                                           ║
 ║     What this proves:                                                     ║
 ║       • Python can load a C++ shared library we compiled                  ║
@@ -78,7 +78,7 @@ def show_the_bridge():
 def summary(max_diff: float):
     print("─" * 75)
     print("Summary:")
-    print(f"  ✓ sparsecore._core loaded from a real compiled .so file")
+    print(f"  ✓ sparselab._core loaded from a real compiled .so file")
     print(f"  ✓ PyTorch tensor flowed Python → C++ → Python without corruption")
     print(f"  ✓ Oracle check: max |C++ − PyTorch| = {max_diff:.2e}  (< 1e-5 tolerance)")
     print(f"  ✓ Ready for Milestone 2: NEON SIMD dense matmul")

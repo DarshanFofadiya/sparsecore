@@ -32,7 +32,7 @@
 #endif
 
 
-namespace sparsecore {
+namespace sparselab {
 
 float vector_dot_simd_neon(const float* a, const float* b, std::size_t n) {
 
@@ -108,4 +108,4 @@ float vector_dot_simd_neon(const float* a, const float* b, std::size_t n) {
     return sum;
 }
 
-}  // namespace sparsecore
+}  // namespace sparselab

@@ -14,7 +14,7 @@ How to run
 ──────────
     python examples/demo_07_90pct_convergence.py
 
-Needs: pip install sparsecore[demos]
+Needs: pip install sparselab[demos]
 
 Runtime: ~8-15 minutes on M3 Pro.
 
@@ -44,16 +44,16 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
 try:
     from torchvision import datasets, transforms
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
-from sparsecore import PaddedCSR
-from sparsecore.ops import _SpMMFunction
+import sparselab
+from sparselab import PaddedCSR
+from sparselab.ops import _SpMMFunction
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -180,7 +180,7 @@ def make_sparse_path(sparsity: float):
             correct, total = 0, 0
             for imgs, labels in loader:
                 x = imgs.view(imgs.size(0), -1).t()
-                h = F.relu(sparsecore.spmm(W_csr, x))
+                h = F.relu(sparselab.spmm(W_csr, x))
                 logits = fc2.weight @ h
                 correct += (logits.t().argmax(1) == labels).sum().item()
                 total += labels.size(0)
@@ -210,7 +210,7 @@ def plot_curves(d, s, out_path):
 
 
 def main():
-    print(f"\nSparseCore demo 7 — {SPARSITY*100:.0f}% sparsity convergence test")
+    print(f"\nSparseLab demo 7 — {SPARSITY*100:.0f}% sparsity convergence test")
     print(f"MAX_EPOCHS={MAX_EPOCHS}  PATIENCE={PATIENCE}  LR={LR}  batch={BATCH_SIZE}")
     print("=" * 80)
 

@@ -15,7 +15,7 @@
 #include <stdexcept>    // std::invalid_argument
 
 
-namespace sparsecore {
+namespace sparselab {
 
 void spmm_scalar(
     const PaddedCSR& W,
@@ -104,4 +104,4 @@ void spmm_scalar(
     }
 }
 
-}  // namespace sparsecore
+}  // namespace sparselab

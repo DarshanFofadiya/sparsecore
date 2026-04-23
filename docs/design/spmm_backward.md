@@ -2,12 +2,12 @@
 
 ## Purpose
 
-This document specifies how SparseCore computes gradients for the
+This document specifies how SparseLab computes gradients for the
 sparse-dense matrix multiply `Y = W @ X`, where `W` is a `PaddedCSR`
 and `X` is dense. Everything in this doc is math + API spec; kernels
 and tests reference this doc, not each other.
 
-Milestone 4a turns our forward-only `sparsecore.spmm` into a full
+Milestone 4a turns our forward-only `sparselab.spmm` into a full
 autograd-compatible operation. After 4a lands, a user can call
 `loss.backward()` on a computation that includes a sparse layer.
 
@@ -119,7 +119,7 @@ The regrow-time dense gradient is a **separate operation** we expose
 on the Router, not something autograd handles (Milestone 4d/4e).
 
 This separation is the single most important design decision in this
-doc. It's what separates SparseCore from dense-simulated libraries.
+doc. It's what separates SparseLab from dense-simulated libraries.
 
 ---
 
@@ -176,7 +176,7 @@ forward kernel. Same math, clearer code, easier to verify.
 ### 4.1 C++ kernel signatures
 
 ```cpp
-namespace sparsecore {
+namespace sparselab {
 
 // dL/dW at live slots only.
 //   W          — the sparse weight (only col_indices, row_start,
@@ -203,7 +203,7 @@ void spmm_grad_X(
     float* dX
 );
 
-}  // namespace sparsecore
+}  // namespace sparselab
 ```
 
 Both kernels self-zero their output buffers (same contract as
@@ -220,7 +220,7 @@ class SpMMFunction(torch.autograd.Function):
         #   that autograd tracks
         ctx.save_for_backward(W_values, X)
         ctx.W = W
-        return sparsecore.spmm(W, X)  # our existing forward
+        return sparselab.spmm(W, X)  # our existing forward
 
     @staticmethod
     def backward(ctx, dY):
@@ -237,7 +237,7 @@ class SpMMFunction(torch.autograd.Function):
 ### 4.3 Public API
 
 No new public function for 4a — users never call the autograd function
-directly. Instead, the dispatch in `sparsecore.spmm` gets a check:
+directly. Instead, the dispatch in `sparselab.spmm` gets a check:
 "if either input has `requires_grad`, route through the autograd
 wrapper." This is how `torch.sparse.mm` works; we match it.
 
@@ -359,7 +359,7 @@ steps 3 and 4.
 ## 10. Open questions (to resolve during implementation)
 
 1. Where exactly does the "requires_grad routing" live? Probably in
-   `sparsecore/ops.py`'s `spmm()`; we'll confirm during 4a-v.
+   `sparselab/ops.py`'s `spmm()`; we'll confirm during 4a-v.
 2. Do we need to save `W_values` for backward, or is `W` enough?
    Technically backward only reads `W.col_indices`, `W.row_start`,
    `W.row_nnz`, so `W_values` is NOT used in backward. But autograd

@@ -1,14 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  csrc/bindings.cpp
 //
-//  Sole file that registers SparseCore's C++ kernels as Python callables.
+//  Sole file that registers SparseLab's C++ kernels as Python callables.
 //
 //  This file contains NO math. Its only jobs are:
 //    1. Unwrap py::array_t<float> objects into raw (float*, size_t) pairs
 //    2. Call the kernel implementations in csrc/kernels/
 //    3. Wrap results back into Python objects
 //
-//  Every new kernel added to SparseCore gets:
+//  Every new kernel added to SparseLab gets:
 //    - Its own file in csrc/kernels/<name>.cpp + .hpp (pure C++)
 //    - A thin Python wrapper function here
 //    - A single m.def() line in PYBIND11_MODULE
@@ -56,7 +56,7 @@ py::array_t<float> py_double_tensor(py::array_t<float> input) {
     float* out_ptr = static_cast<float*>(out_info.ptr);
 
     // Delegate the actual math to the kernel. Bindings do no computation.
-    sparsecore::double_tensor_scalar(in_ptr, out_ptr, n);
+    sparselab::double_tensor_scalar(in_ptr, out_ptr, n);
 
     return output;
 }
@@ -120,7 +120,7 @@ float py_vector_dot(
     const float* b_ptr;
     std::size_t n;
     validate_and_extract_dot_inputs(a, b, "vector_dot", a_ptr, b_ptr, n);
-    return sparsecore::vector_dot_scalar(a_ptr, b_ptr, n);
+    return sparselab::vector_dot_scalar(a_ptr, b_ptr, n);
 }
 
 
@@ -143,13 +143,13 @@ float py_vector_dot_simd(
     std::size_t n;
     validate_and_extract_dot_inputs(a, b, "vector_dot_simd", a_ptr, b_ptr, n);
 #if defined(__ARM_NEON)
-    return sparsecore::vector_dot_simd_neon(a_ptr, b_ptr, n);
+    return sparselab::vector_dot_simd_neon(a_ptr, b_ptr, n);
 #else
     // Non-ARM fallback: scalar kernel. The public API stays stable so
     // Python callers don't break when running on x86; they just don't
     // get the NEON speedup (which doesn't exist on x86 anyway — AVX is
     // a v0.2 community contribution opportunity).
-    return sparsecore::vector_dot_scalar(a_ptr, b_ptr, n);
+    return sparselab::vector_dot_scalar(a_ptr, b_ptr, n);
 #endif
 }
 
@@ -189,7 +189,7 @@ struct SpmmPlan {
 };
 
 SpmmPlan prepare_spmm(
-    const sparsecore::PaddedCSR& W,
+    const sparselab::PaddedCSR& W,
     const py::array_t<float, py::array::c_style | py::array::forcecast>& X,
     const char* kernel_name
 ) {
@@ -230,25 +230,25 @@ SpmmPlan prepare_spmm(
 
 
 py::array_t<float> py_spmm_scalar(
-    const sparsecore::PaddedCSR& W,
+    const sparselab::PaddedCSR& W,
     py::array_t<float, py::array::c_style | py::array::forcecast> X
 ) {
     auto plan = prepare_spmm(W, X, "spmm_scalar");
-    sparsecore::spmm_scalar(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+    sparselab::spmm_scalar(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
     return plan.Y;
 }
 
 
 py::array_t<float> py_spmm_simd(
-    const sparsecore::PaddedCSR& W,
+    const sparselab::PaddedCSR& W,
     py::array_t<float, py::array::c_style | py::array::forcecast> X
 ) {
     auto plan = prepare_spmm(W, X, "spmm_simd");
 #if defined(__ARM_NEON)
-    sparsecore::spmm_simd_neon(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+    sparselab::spmm_simd_neon(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
 #else
     // Non-ARM fallback: scalar SpMM. See py_vector_dot_simd rationale.
-    sparsecore::spmm_scalar(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+    sparselab::spmm_scalar(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
 #endif
     return plan.Y;
 }
@@ -278,7 +278,7 @@ py::array_t<float> py_spmm_simd(
 //    - dY.shape[1] must equal X.shape[1] (the shared "N" dim)
 // ─────────────────────────────────────────────────────────────────────────
 py::array_t<float> py_spmm_grad_w(
-    const sparsecore::PaddedCSR& W,
+    const sparselab::PaddedCSR& W,
     py::array_t<float, py::array::c_style | py::array::forcecast> dY,
     py::array_t<float, py::array::c_style | py::array::forcecast> X
 ) {
@@ -336,7 +336,7 @@ py::array_t<float> py_spmm_grad_w(
     const float* X_ptr = static_cast<const float*>(x_info.ptr);
     float* dW_ptr = static_cast<float*>(dw_info.ptr);
 
-    sparsecore::spmm_grad_w(W, dY_ptr, N_dy, X_ptr, K_x, dW_ptr);
+    sparselab::spmm_grad_w(W, dY_ptr, N_dy, X_ptr, K_x, dW_ptr);
 
     return dW;
 }
@@ -391,7 +391,7 @@ py::array_t<float> py_dense_grad(
     const float* X_ptr = static_cast<const float*>(x_info.ptr);
     float* G_ptr = static_cast<float*>(g_info.ptr);
 
-    sparsecore::dense_grad(M, K, N_dy, dY_ptr, X_ptr, G_ptr);
+    sparselab::dense_grad(M, K, N_dy, dY_ptr, X_ptr, G_ptr);
 
     return G;
 }
@@ -400,10 +400,10 @@ py::array_t<float> py_dense_grad(
 // ─────────────────────────────────────────────────────────────────────────
 //  Module registration.
 //  The first argument (_core) must match the name in setup.py's
-//  Pybind11Extension ("sparsecore._core" → everything after the dot).
+//  Pybind11Extension ("sparselab._core" → everything after the dot).
 // ─────────────────────────────────────────────────────────────────────────
 PYBIND11_MODULE(_core, m) {
-    m.doc() = "SparseCore C++ core — compiled kernels for sparse training.";
+    m.doc() = "SparseLab C++ core — compiled kernels for sparse training.";
 
     m.def("double_tensor", &py_double_tensor,
           "Multiply every float in a 1-D array by 2.0. "
@@ -447,14 +447,14 @@ PYBIND11_MODULE(_core, m) {
     //  See docs/design/padded_csr.md for the full specification.
     // ═════════════════════════════════════════════════════════════════════
     //
-    //  Exposes the C++ sparsecore::PaddedCSR struct as a Python class.
+    //  Exposes the C++ sparselab::PaddedCSR struct as a Python class.
     //  The `values`, `col_indices`, `row_start`, `row_nnz`, `row_capacity`
     //  properties return zero-copy NumPy views over the C++ vectors.
     //  Python code must treat them as read-only (enforced by numpy's
     //  writable=False flag below).
     //
     //  The Python-facing user API (from_dense, from_torch_sparse_csr,
-    //  random) is defined in sparsecore/layout.py — that module constructs
+    //  random) is defined in sparselab/layout.py — that module constructs
     //  the underlying C++ object by calling this class's full constructor.
     // ─────────────────────────────────────────────────────────────────────
 
@@ -500,7 +500,7 @@ PYBIND11_MODULE(_core, m) {
         );
     };
 
-    py::class_<sparsecore::PaddedCSR>(m, "PaddedCSR",
+    py::class_<sparselab::PaddedCSR>(m, "PaddedCSR",
         "Sparse matrix with padded-row CSR storage for O(1) insertion. "
         "See docs/design/padded_csr.md for full specification.")
 
@@ -515,13 +515,13 @@ PYBIND11_MODULE(_core, m) {
                          std::vector<int32_t> row_start,
                          std::vector<int32_t> row_nnz,
                          std::vector<int32_t> row_capacity) {
-                auto p = std::make_unique<sparsecore::PaddedCSR>(
+                auto p = std::make_unique<sparselab::PaddedCSR>(
                     nrows, ncols,
                     std::move(values), std::move(col_indices),
                     std::move(row_start), std::move(row_nnz),
                     std::move(row_capacity)
                 );
-                sparsecore::assert_invariants(*p);  // validate on construction
+                sparselab::assert_invariants(*p);  // validate on construction
                 return p;
              }),
              py::arg("nrows"), py::arg("ncols"),
@@ -531,31 +531,31 @@ PYBIND11_MODULE(_core, m) {
              "doc §2.2; raises ValueError on any violation.")
 
         // ─── Shape ───────────────────────────────────────────────────────
-        .def_property_readonly("shape", [](const sparsecore::PaddedCSR& self) {
+        .def_property_readonly("shape", [](const sparselab::PaddedCSR& self) {
             return py::make_tuple(self.nrows, self.ncols);
         })
-        .def_property_readonly("nrows", [](const sparsecore::PaddedCSR& self) {
+        .def_property_readonly("nrows", [](const sparselab::PaddedCSR& self) {
             return self.nrows;
         })
-        .def_property_readonly("ncols", [](const sparsecore::PaddedCSR& self) {
+        .def_property_readonly("ncols", [](const sparselab::PaddedCSR& self) {
             return self.ncols;
         })
 
         // ─── Aggregate accessors ─────────────────────────────────────────
-        .def_property_readonly("nnz", &sparsecore::PaddedCSR::nnz,
+        .def_property_readonly("nnz", &sparselab::PaddedCSR::nnz,
             "Total live non-zero entries (sum of row_nnz).")
-        .def_property_readonly("total_capacity", &sparsecore::PaddedCSR::total_capacity,
+        .def_property_readonly("total_capacity", &sparselab::PaddedCSR::total_capacity,
             "Total allocated slots including padding (sum of row_capacity).")
-        .def_property_readonly("padding_slots", &sparsecore::PaddedCSR::padding_slots,
+        .def_property_readonly("padding_slots", &sparselab::PaddedCSR::padding_slots,
             "Number of slots allocated but not yet used (total_capacity - nnz).")
-        .def_property_readonly("sparsity", [](const sparsecore::PaddedCSR& self) {
+        .def_property_readonly("sparsity", [](const sparselab::PaddedCSR& self) {
             // Fraction of logical cells that are zero = 1 - nnz / (nrows*ncols).
             if (self.nrows == 0 || self.ncols == 0) return 1.0;
             return 1.0 - static_cast<double>(self.nnz()) /
                          static_cast<double>(self.nrows * self.ncols);
         })
         .def_property_readonly("topology_version",
-            [](const sparsecore::PaddedCSR& self) { return self.topology_version; },
+            [](const sparselab::PaddedCSR& self) { return self.topology_version; },
             "Monotonically increasing counter bumped on every rewrite_row. "
             "Used by external code (autograd, caches) to detect topology "
             "changes and invalidate derived structures like transposes.")
@@ -565,28 +565,28 @@ PYBIND11_MODULE(_core, m) {
         // W.values -= lr * dW_values. The structural arrays below are
         // read-only because mutating them would break PaddedCSR invariants.
         .def_property_readonly("values", [make_writable_view](py::object self_obj) {
-            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            auto& self = self_obj.cast<sparselab::PaddedCSR&>();
             return make_writable_view(self.values, self_obj);
         })
         .def_property_readonly("col_indices", [make_readonly_view](py::object self_obj) {
-            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            auto& self = self_obj.cast<sparselab::PaddedCSR&>();
             return make_readonly_view(self.col_indices, self_obj);
         })
         .def_property_readonly("row_start", [make_readonly_view](py::object self_obj) {
-            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            auto& self = self_obj.cast<sparselab::PaddedCSR&>();
             return make_readonly_view(self.row_start, self_obj);
         })
         .def_property_readonly("row_nnz", [make_readonly_view](py::object self_obj) {
-            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            auto& self = self_obj.cast<sparselab::PaddedCSR&>();
             return make_readonly_view(self.row_nnz, self_obj);
         })
         .def_property_readonly("row_capacity", [make_readonly_view](py::object self_obj) {
-            auto& self = self_obj.cast<sparsecore::PaddedCSR&>();
+            auto& self = self_obj.cast<sparselab::PaddedCSR&>();
             return make_readonly_view(self.row_capacity, self_obj);
         })
 
         // ─── Invariants ──────────────────────────────────────────────────
-        .def("assert_invariants", &sparsecore::assert_invariants,
+        .def("assert_invariants", &sparselab::assert_invariants,
              "Verify all 8 invariants from design doc §2.2; raise ValueError "
              "with a descriptive message on any violation.")
 
@@ -605,7 +605,7 @@ PYBIND11_MODULE(_core, m) {
         // maintenance (column sort, padding sentinel, row_nnz) lives
         // in C++ so Python code cannot corrupt the CSR.
         .def("rewrite_row",
-             [](sparsecore::PaddedCSR& self,
+             [](sparselab::PaddedCSR& self,
                 int64_t row_idx,
                 py::array_t<int32_t, py::array::c_style | py::array::forcecast> new_cols,
                 py::array_t<float,   py::array::c_style | py::array::forcecast> new_values) {
@@ -638,7 +638,7 @@ PYBIND11_MODULE(_core, m) {
              "Used by DST algorithms (SET, RigL) for topology mutation.")
 
         // ─── Repr ────────────────────────────────────────────────────────
-        .def("__repr__", [](const sparsecore::PaddedCSR& self) {
+        .def("__repr__", [](const sparselab::PaddedCSR& self) {
             return "PaddedCSR(nrows=" + std::to_string(self.nrows) +
                    ", ncols=" + std::to_string(self.ncols) +
                    ", nnz=" + std::to_string(self.nnz()) +

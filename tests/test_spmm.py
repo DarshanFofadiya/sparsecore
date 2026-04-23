@@ -22,8 +22,8 @@ import numpy as np
 import pytest
 import torch
 
-import sparsecore
-from sparsecore import PaddedCSR
+import sparselab
+from sparselab import PaddedCSR
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ def test_spmm_matches_dense_matmul(M, K, N, sparsity):
     W_csr, W_dense = _make_sparse_W(M, K, sparsity=sparsity, seed=42)
     X = torch.randn(K, N, dtype=torch.float32)
 
-    Y_ours = sparsecore.spmm(W_csr, X)
+    Y_ours = sparselab.spmm(W_csr, X)
     Y_oracle = W_dense @ X
 
     assert Y_ours.shape == (M, N)
@@ -117,7 +117,7 @@ def test_spmm_returns_cpu_tensor():
     """Return type is a CPU torch.Tensor regardless of input device hints."""
     W_csr, _ = _make_sparse_W(16, 16, sparsity=0.5)
     X = torch.randn(16, 8, dtype=torch.float32)
-    Y = sparsecore.spmm(W_csr, X)
+    Y = sparselab.spmm(W_csr, X)
     assert isinstance(Y, torch.Tensor)
     assert Y.device.type == "cpu"
 
@@ -131,7 +131,7 @@ def test_spmm_fully_sparse_W_returns_zeros():
     W_dense = torch.zeros(10, 20, dtype=torch.float32)
     W_csr = PaddedCSR.from_dense(W_dense)
     X = torch.randn(20, 5, dtype=torch.float32)
-    Y = sparsecore.spmm(W_csr, X)
+    Y = sparselab.spmm(W_csr, X)
     assert torch.equal(Y, torch.zeros(10, 5, dtype=torch.float32))
 
 
@@ -141,7 +141,7 @@ def test_spmm_all_rows_empty():
     # potentially optimizing the zero case).
     W_csr = PaddedCSR(nrows=8, ncols=16)  # empty-constructor path
     X = torch.randn(16, 4, dtype=torch.float32)
-    Y = sparsecore.spmm(W_csr, X)
+    Y = sparselab.spmm(W_csr, X)
     assert Y.shape == (8, 4)
     assert torch.equal(Y, torch.zeros(8, 4, dtype=torch.float32))
 
@@ -156,7 +156,7 @@ def test_spmm_single_live_entry():
     W_csr = PaddedCSR.from_dense(W_dense)
 
     X = torch.randn(6, 3, dtype=torch.float32)
-    Y = sparsecore.spmm(W_csr, X)
+    Y = sparselab.spmm(W_csr, X)
 
     # Rows 0, 1, 3 must be exactly zero (no live entry contributed).
     assert torch.equal(Y[0], torch.zeros(3))
@@ -173,7 +173,7 @@ def test_spmm_N_equals_1():
     """
     W_csr, W_dense = _make_sparse_W(32, 24, sparsity=0.8, seed=1)
     x = torch.randn(24, 1, dtype=torch.float32)
-    y_ours = sparsecore.spmm(W_csr, x)
+    y_ours = sparselab.spmm(W_csr, x)
     y_oracle = W_dense @ x
     assert y_ours.shape == (32, 1)
     assert torch.allclose(y_ours, y_oracle, rtol=1e-5, atol=1e-5)
@@ -195,7 +195,7 @@ def test_spmm_ignores_padding_slots():
     W_csr = PaddedCSR.from_dense(W_dense, padding_ratio=1.0)
     X = torch.randn(32, 8, dtype=torch.float32)
 
-    Y_ours = sparsecore.spmm(W_csr, X)
+    Y_ours = sparselab.spmm(W_csr, X)
     Y_oracle = W_dense @ X
     assert torch.allclose(Y_ours, Y_oracle, rtol=1e-5, atol=1e-5)
 
@@ -209,7 +209,7 @@ def test_spmm_rejects_1d_X():
     W_csr, _ = _make_sparse_W(8, 8, sparsity=0.5)
     x_1d = torch.randn(8, dtype=torch.float32)
     with pytest.raises(ValueError, match="2-D"):
-        sparsecore.spmm(W_csr, x_1d)
+        sparselab.spmm(W_csr, x_1d)
 
 
 def test_spmm_rejects_shape_mismatch():
@@ -217,7 +217,7 @@ def test_spmm_rejects_shape_mismatch():
     W_csr, _ = _make_sparse_W(M=8, K=16, sparsity=0.5)
     X_wrong = torch.randn(17, 4, dtype=torch.float32)  # K' = 17, not 16
     with pytest.raises(ValueError, match="shape|match|ncols"):
-        sparsecore.spmm(W_csr, X_wrong)
+        sparselab.spmm(W_csr, X_wrong)
 
 
 def test_spmm_rejects_wrong_W_type():
@@ -225,14 +225,14 @@ def test_spmm_rejects_wrong_W_type():
     W_tensor = torch.randn(8, 16)
     X = torch.randn(16, 4)
     with pytest.raises(TypeError, match="PaddedCSR"):
-        sparsecore.spmm(W_tensor, X)
+        sparselab.spmm(W_tensor, X)
 
 
 def test_spmm_rejects_wrong_X_type():
     """X must be a torch.Tensor, not a numpy array or list."""
     W_csr, _ = _make_sparse_W(8, 16, sparsity=0.5)
     with pytest.raises(TypeError, match="torch.Tensor"):
-        sparsecore.spmm(W_csr, np.random.randn(16, 4).astype(np.float32))
+        sparselab.spmm(W_csr, np.random.randn(16, 4).astype(np.float32))
 
 
 @pytest.mark.skipif(
@@ -245,7 +245,7 @@ def test_spmm_rejects_non_cpu_X():
     device = "cuda" if torch.cuda.is_available() else "mps"
     X = torch.randn(16, 4, device=device)
     with pytest.raises(RuntimeError, match="CPU"):
-        sparsecore.spmm(W_csr, X)
+        sparselab.spmm(W_csr, X)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ def test_spmm_accepts_float64_X():
     W_csr, W_dense = _make_sparse_W(16, 24, sparsity=0.7, seed=2)
     X64 = torch.randn(24, 8, dtype=torch.float64)
 
-    Y_ours = sparsecore.spmm(W_csr, X64)
+    Y_ours = sparselab.spmm(W_csr, X64)
     Y_oracle = W_dense @ X64.float()  # oracle in float32 for a fair compare
 
     assert Y_ours.dtype == torch.float32
@@ -280,7 +280,7 @@ def test_spmm_accepts_non_contiguous_X():
 
     assert not X_view.is_contiguous(), "sanity: view should be non-contiguous"
 
-    Y_ours = sparsecore.spmm(W_csr, X_view)
+    Y_ours = sparselab.spmm(W_csr, X_view)
     Y_oracle = W_dense @ X_view
     assert torch.allclose(Y_ours, Y_oracle, rtol=1e-5, atol=1e-5)
 
@@ -297,9 +297,9 @@ def test_spmm_idempotent_under_repeat():
     W_csr, _ = _make_sparse_W(32, 32, sparsity=0.8, seed=7)
     X = torch.randn(32, 16, dtype=torch.float32)
 
-    Y1 = sparsecore.spmm(W_csr, X)
-    Y2 = sparsecore.spmm(W_csr, X)
-    Y3 = sparsecore.spmm(W_csr, X)
+    Y1 = sparselab.spmm(W_csr, X)
+    Y2 = sparselab.spmm(W_csr, X)
+    Y3 = sparselab.spmm(W_csr, X)
     assert torch.equal(Y1, Y2)
     assert torch.equal(Y2, Y3)
 
@@ -312,6 +312,6 @@ def test_spmm_different_seeds_differ():
     W1, _ = _make_sparse_W(16, 16, sparsity=0.5, seed=1)
     W2, _ = _make_sparse_W(16, 16, sparsity=0.5, seed=2)
     X = torch.randn(16, 4, dtype=torch.float32)
-    Y1 = sparsecore.spmm(W1, X)
-    Y2 = sparsecore.spmm(W2, X)
+    Y1 = sparselab.spmm(W1, X)
+    Y2 = sparselab.spmm(W2, X)
     assert not torch.allclose(Y1, Y2)

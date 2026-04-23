@@ -30,8 +30,8 @@ import time
 import numpy as np
 import torch
 
-import sparsecore
-from sparsecore import _core
+import sparselab
+from sparselab import _core
 
 
 CONFIGS = [
@@ -67,7 +67,7 @@ def measure_config(name: str, K: int, M: int, N: int, sparsity: float) -> dict:
     # Build SparseLinear-shaped pieces:
     #   W: PaddedCSR (M rows, K cols) — matches nn.Linear's weight shape
     #       except we use our CSR
-    W = sparsecore.PaddedCSR.random(M, K, sparsity=sparsity, seed=0)
+    W = sparselab.PaddedCSR.random(M, K, sparsity=sparsity, seed=0)
 
     # Forward input is shaped (K, N) because our kernel takes (K, N).
     # At the SparseLinear level, users see (*, K) and we transpose inside.
@@ -83,7 +83,7 @@ def measure_config(name: str, K: int, M: int, N: int, sparsity: float) -> dict:
 
     # ─── Composed fwd+bwd through SparseLinear (the full pipeline) ─
     # This is what a user actually experiences per-layer per-step.
-    layer = sparsecore.SparseLinear(K, M, sparsity=sparsity, bias=False)
+    layer = sparselab.SparseLinear(K, M, sparsity=sparsity, bias=False)
     # Force the layer's internal CSR to match our test W exactly so
     # comparisons are apples-to-apples.
     # (Actually easier to just rebuild with fresh seed; not crucial.)

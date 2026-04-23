@@ -1,5 +1,5 @@
 """
-Tests for sparsecore.router (Milestone 4d).
+Tests for sparselab.router (Milestone 4d).
 
 The Router API is pure Python — it doesn't touch kernels — so the
 tests focus on the API contract:
@@ -16,8 +16,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-import sparsecore
-from sparsecore import SparseLinear, SparsityAlgorithm, Static
+import sparselab
+from sparselab import SparseLinear, SparsityAlgorithm, Static
 
 
 # ─────────────────────────────────────────────────────────────────────

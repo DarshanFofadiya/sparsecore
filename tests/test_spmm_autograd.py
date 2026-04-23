@@ -23,9 +23,9 @@ import numpy as np
 import pytest
 import torch
 
-import sparsecore
-from sparsecore import PaddedCSR
-from sparsecore.ops import _SpMMFunction
+import sparselab
+from sparselab import PaddedCSR
+from sparselab.ops import _SpMMFunction
 
 
 @pytest.fixture(autouse=True)
@@ -96,7 +96,7 @@ def test_gradcheck_dX(M, K, N, sparsity):
         # gradcheck's comparison. The conversion itself is differentiable
         # so autograd chain rule still works — the only error we're
         # measuring is the float32 precision loss during our kernel.
-        return sparsecore.spmm(W_csr, x.float()).double()
+        return sparselab.spmm(W_csr, x.float()).double()
 
     assert torch.autograd.gradcheck(
         fn, (X,),
@@ -136,7 +136,7 @@ def test_backward_dX_matches_dense(M, K, N, sparsity):
 
     # Our path
     X_ours = X_init.clone().requires_grad_(True)
-    Y_ours = sparsecore.spmm(W_csr, X_ours)
+    Y_ours = sparselab.spmm(W_csr, X_ours)
     loss_ours = (Y_ours * torch.randn_like(Y_ours)).sum()
     # We need the SAME random upstream grad for both paths. Regenerate:
     torch.manual_seed(99)
@@ -144,7 +144,7 @@ def test_backward_dX_matches_dense(M, K, N, sparsity):
 
     X_ours.grad = None
     X_ours = X_init.clone().requires_grad_(True)
-    Y_ours = sparsecore.spmm(W_csr, X_ours)
+    Y_ours = sparselab.spmm(W_csr, X_ours)
     Y_ours.backward(upstream)
 
     # Oracle path
@@ -215,7 +215,7 @@ def test_no_grad_path_is_used_when_no_requires_grad():
     """
     W_csr = PaddedCSR.from_dense(torch.randn(4, 4))
     X = torch.randn(4, 2, dtype=torch.float32, requires_grad=False)
-    Y = sparsecore.spmm(W_csr, X)
+    Y = sparselab.spmm(W_csr, X)
     assert Y.requires_grad is False
 
 
@@ -227,7 +227,7 @@ def test_no_grad_context_skips_autograd():
     W_csr = PaddedCSR.from_dense(torch.randn(4, 4))
     X = torch.randn(4, 2, dtype=torch.float32, requires_grad=True)
     with torch.no_grad():
-        Y = sparsecore.spmm(W_csr, X)
+        Y = sparselab.spmm(W_csr, X)
     assert Y.requires_grad is False
 
 

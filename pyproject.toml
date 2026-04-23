@@ -1,18 +1,18 @@
-# SparseCore build and metadata specification.
+# SparseLab build and metadata specification.
 
 [build-system]
 requires = ["setuptools>=68", "wheel", "pybind11>=2.11"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sparsecore"
-version = "0.1.1"
+name = "sparselab"
+version = "0.2.0"
 description = "Dynamic sparse training for PyTorch, CPU-native, Apple Silicon first."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "SparseCore Contributors" }]
+authors = [{ name = "SparseLab Contributors" }]
 keywords = ["pytorch", "sparsity", "dynamic-sparse-training", "neon", "apple-silicon"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -35,21 +35,21 @@ dev = ["pytest>=7.0", "pybind11>=2.11"]
 demos = ["matplotlib>=3.7", "torchvision>=0.15"]
 
 [project.urls]
-Homepage = "https://github.com/DarshanFofadiya/sparsecore"
-Documentation = "https://github.com/DarshanFofadiya/sparsecore/tree/main/docs"
-Issues = "https://github.com/DarshanFofadiya/sparsecore/issues"
+Homepage = "https://github.com/DarshanFofadiya/sparselab"
+Documentation = "https://github.com/DarshanFofadiya/sparselab/tree/main/docs"
+Issues = "https://github.com/DarshanFofadiya/sparselab/issues"
 
 [tool.setuptools.packages.find]
-include = ["sparsecore*"]
+include = ["sparselab*"]
 exclude = ["tests*", "examples*", "csrc*", "docs*"]
 
 [tool.pytest.ini_options]
 # Use importlib import mode — the modern recommendation. Without this,
 # pytest's legacy "prepend" mode adds the workspace root to sys.path[0],
-# which makes Python discover the workspace's `sparsecore/` folder as a
+# which makes Python discover the workspace's `sparselab/` folder as a
 # namespace package BEFORE the installed editable package is resolved.
-# The namespace-package view of sparsecore has no __init__.py executed,
-# so `from sparsecore import PaddedCSR` fails with "unknown location".
+# The namespace-package view of sparselab has no __init__.py executed,
+# so `from sparselab import PaddedCSR` fails with "unknown location".
 # importlib mode keeps the installed package as the canonical source.
 # See: https://docs.pytest.org/en/stable/explanation/pythonpath.html
 addopts = "--import-mode=importlib"
@@ -72,7 +72,7 @@ pythonpath = []  # explicitly do NOT add the workspace root
 #     Both are automatic once libomp is linked — no custom repair
 #     command needed.
 #   - Run a smoke test inside each wheel's environment before
-#     accepting the wheel. The smoke test imports sparsecore,
+#     accepting the wheel. The smoke test imports sparselab,
 #     runs a forward + backward, and verifies gradients flow.
 #     Full pytest suite isn't run inside the wheel env because
 #     tests/ aren't shipped in the wheel.
@@ -111,7 +111,7 @@ skip = [
 test-command = "python {project}/scripts/smoke_test.py"
 # Install torch at test time (our dependency, but we want the wheel env
 # to install it fresh, not carry it over from build).
-# This mirrors what a real user's `pip install sparsecore` will do.
+# This mirrors what a real user's `pip install sparselab` will do.
 test-requires = []
 
 # ─── macOS-specific configuration ─────────────────────────────────
@@ -129,7 +129,7 @@ before-build = [
 # The crux of the macOS story: PyTorch's wheel ships its own libomp.dylib
 # inside torch/lib/. We want our wheel to DEPEND on torch's libomp at
 # runtime, not carry its own copy. If we let delocate bundle libomp into
-# sparsecore/.dylibs/, there are TWO copies of libomp in the process
+# sparselab/.dylibs/, there are TWO copies of libomp in the process
 # (torch's + ours) and OpenMP's runtime aborts the process (SIGABRT
 # on init, observed as exit code -6 in the smoke test).
 #
@@ -146,7 +146,7 @@ before-build = [
 #           rpaths at runtime.
 #        d. Ensures our rpath list includes @loader_path/../../torch/lib
 #           so torch's libomp is findable from an installed wheel.
-#   2. At runtime, sparsecore/__init__.py imports torch FIRST, which
+#   2. At runtime, sparselab/__init__.py imports torch FIRST, which
 #      loads torch's libomp. When _core.so loads, its @rpath/libomp.dylib
 #      lookup resolves to the already-loaded torch libomp. One copy in
 #      the process. No collision.

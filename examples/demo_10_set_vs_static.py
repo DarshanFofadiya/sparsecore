@@ -9,15 +9,15 @@ to close part of that gap by moving the few available weights to where
 the task actually needs them.
 
 This demo trains two identical MLPs — same seed, same hyperparameters,
-same total training budget — but one uses sparsecore.Static (frozen
-random mask) and the other uses sparsecore.SET (drop smallest-
+same total training budget — but one uses sparselab.Static (frozen
+random mask) and the other uses sparselab.SET (drop smallest-
 magnitude K% every 100 steps, regrow K% random empties).
 
 How to run
 ──────────
     python examples/demo_10_set_vs_static.py
 
-Needs: pip install sparsecore[demos]
+Needs: pip install sparselab[demos]
 
 Runtime: ~5-10 minutes on M3 Pro.
 
@@ -49,14 +49,14 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
 try:
     from torchvision import datasets, transforms
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
+import sparselab
 
 
 # ─── Config ──────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ def build_model():
     seed every time — the only difference between runs is which
     sparsity algorithm we attach."""
     torch.manual_seed(0)
-    fc1 = sparsecore.SparseLinear(784, HIDDEN, sparsity=SPARSITY, bias=False)
+    fc1 = sparselab.SparseLinear(784, HIDDEN, sparsity=SPARSITY, bias=False)
     fc2 = nn.Linear(HIDDEN, 10, bias=False)
     return fc1, fc2
 
@@ -198,7 +198,7 @@ def plot_comparison(static_result, set_result, out_path):
 
 
 def main():
-    print(f"\nSparseCore demo 10 — SET vs Static at {SPARSITY*100:.0f}% sparsity")
+    print(f"\nSparseLab demo 10 — SET vs Static at {SPARSITY*100:.0f}% sparsity")
     print(f"HIDDEN={HIDDEN}  EPOCHS={EPOCHS}  BATCH={BATCH_SIZE}  LR={LR}")
     print(f"SET: drop_fraction={DROP_FRACTION}, update_freq={UPDATE_FREQ}")
     print("=" * 80)
@@ -206,8 +206,8 @@ def main():
     print("Loading MNIST...")
     train_loader, test_loader = load_mnist()
 
-    static_algo = sparsecore.Static(sparsity=SPARSITY)
-    set_algo = sparsecore.SET(
+    static_algo = sparselab.Static(sparsity=SPARSITY)
+    set_algo = sparselab.SET(
         sparsity=SPARSITY,
         drop_fraction=DROP_FRACTION,
         update_freq=UPDATE_FREQ,

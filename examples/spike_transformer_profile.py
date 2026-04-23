@@ -11,7 +11,7 @@ Architecture (matches 4g plan):
   - 2-layer decoder-only transformer
   - d_model=128, d_ff=512, n_heads=4, seq_len=64
   - Vocab=65 (Shakespeare-scale)
-  - FFN uses sparsecore.SparseLinear at 90% sparsity
+  - FFN uses sparselab.SparseLinear at 90% sparsity
   - Attention (Q, K, V, O projections) stays dense for now
 
 How to run
@@ -34,7 +34,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import sparsecore
+import sparselab
 
 
 # ─── Config ──────────────────────────────────────────────────────────
@@ -80,13 +80,13 @@ class CausalSelfAttention(nn.Module):
 
 
 class SparseFFN(nn.Module):
-    """Two-layer FFN with both layers as sparsecore.SparseLinear.
+    """Two-layer FFN with both layers as sparselab.SparseLinear.
     This is the part we actually sparsify."""
     def __init__(self, d_model: int, d_ff: int, sparsity: float):
         super().__init__()
-        self.fc_up = sparsecore.SparseLinear(d_model, d_ff,
+        self.fc_up = sparselab.SparseLinear(d_model, d_ff,
                                                sparsity=sparsity, bias=False)
-        self.fc_down = sparsecore.SparseLinear(d_ff, d_model,
+        self.fc_down = sparselab.SparseLinear(d_ff, d_model,
                                                  sparsity=sparsity, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -162,7 +162,7 @@ def count_params(model: nn.Module) -> tuple[int, int]:
     dense = 0
     sparse_live = 0
     for name, mod in model.named_modules():
-        if isinstance(mod, sparsecore.SparseLinear):
+        if isinstance(mod, sparselab.SparseLinear):
             sparse_live += mod.nnz
         else:
             for p in mod.parameters(recurse=False):
@@ -175,7 +175,7 @@ def count_params(model: nn.Module) -> tuple[int, int]:
 # ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print("\nSparseCore spike — transformer-scale timing breakdown")
+    print("\nSparseLab spike — transformer-scale timing breakdown")
     print(f"  Architecture: {N_LAYERS}L x d_model={D_MODEL} x d_ff={D_FF} x "
           f"heads={N_HEADS} x seq_len={SEQ_LEN}")
     print(f"  Batch: {BATCH_SIZE}  Vocab: {VOCAB_SIZE}  FFN sparsity: {SPARSITY}")
@@ -262,7 +262,7 @@ def main():
     one_sparse_fwd_bwd = np.median(fwd_bwd_times) * 1000
 
     # Raw SpMM forward-only kernel
-    from sparsecore import _core
+    from sparselab import _core
     W_raw = fc_up._csr
     # Kernel wants (D_MODEL, batch) = (128, 1024). Pre-build numpy input.
     X_raw = np.random.randn(D_MODEL, BATCH_SIZE * SEQ_LEN).astype(np.float32)

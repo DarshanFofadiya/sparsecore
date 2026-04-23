@@ -21,7 +21,7 @@ How to run
     python examples/demo_05_mnist.py
 
 Needs torchvision + matplotlib:
-    pip install sparsecore[demos]
+    pip install sparselab[demos]
 
 What to look at
 ───────────────
@@ -52,18 +52,18 @@ try:
     import matplotlib.pyplot as plt
 except ImportError:
     raise SystemExit(
-        "demo_05 requires matplotlib. Install with: pip install sparsecore[demos]"
+        "demo_05 requires matplotlib. Install with: pip install sparselab[demos]"
     )
 
 try:
     from torchvision import datasets, transforms
 except ImportError:
     raise SystemExit(
-        "demo_05 requires torchvision. Install with: pip install sparsecore[demos]"
+        "demo_05 requires torchvision. Install with: pip install sparselab[demos]"
     )
 
-import sparsecore
-from sparsecore import PaddedCSR
+import sparselab
+from sparselab import PaddedCSR
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -268,22 +268,22 @@ def train_dense(train_loader, test_loader, sparsity: float) -> RunResult:
 
 def train_sparse(train_loader, test_loader, sparsity: float) -> RunResult:
     """
-    Train an MLP where the hidden layer is a SparseCore ``SparseLinear``
+    Train an MLP where the hidden layer is a SparseLab ``SparseLinear``
     backed by PaddedCSR storage. Input and output layers stay dense.
 
     This is the flagship: our actual product's training loop, as of
     milestone 4b. Notice how little of this function actually mentions
-    SparseCore — the whole training loop looks identical to a dense
+    SparseLab — the whole training loop looks identical to a dense
     PyTorch training loop, except for one line:
 
-        fc1 = sparsecore.SparseLinear(784, HIDDEN, sparsity=sparsity, bias=False)
+        fc1 = sparselab.SparseLinear(784, HIDDEN, sparsity=sparsity, bias=False)
 
     That is the "two-line adoption" promise stated in PROJECT_OVERVIEW.md.
     """
     torch.manual_seed(0)
 
     # The ONE sparse-specific line in this training loop.
-    fc1 = sparsecore.SparseLinear(784, HIDDEN, sparsity=sparsity, bias=False)
+    fc1 = sparselab.SparseLinear(784, HIDDEN, sparsity=sparsity, bias=False)
     fc2 = nn.Linear(HIDDEN, 10, bias=False)
 
     # Standard torch.optim usage — no special sparse-aware optimizer.
@@ -319,7 +319,7 @@ def train_sparse(train_loader, test_loader, sparsity: float) -> RunResult:
 
     total_s = time.perf_counter() - t_start
 
-    # Evaluate. We keep using the plain sparsecore.spmm() for eval
+    # Evaluate. We keep using the plain sparselab.spmm() for eval
     # (no autograd overhead). Same weights via fc1._csr.
     with torch.no_grad():
         correct = 0
@@ -351,7 +351,7 @@ def train_sparse(train_loader, test_loader, sparsity: float) -> RunResult:
 def print_header():
     print()
     print("═" * 78)
-    print("SparseCore demo 5 — MNIST training to convergence at multiple sparsities")
+    print("SparseLab demo 5 — MNIST training to convergence at multiple sparsities")
     print(f"Hidden layer: {HIDDEN}   epochs: {NUM_EPOCHS}   batch: {BATCH_SIZE}   lr: {LR}")
     print("═" * 78)
 
@@ -402,7 +402,7 @@ def plot_curves(dense_results, sparse_results, output_path: str):
         ax_d.plot(steps_d, dr.losses, color=color, label=f"{dr.sparsity * 100:.0f}%")
         ax_s.plot(steps_s, sr.losses, color=color, label=f"{sr.sparsity * 100:.0f}%")
 
-    for ax, title in [(ax_d, "Dense (mask-simulated)"), (ax_s, "SparseCore (true sparse)")]:
+    for ax, title in [(ax_d, "Dense (mask-simulated)"), (ax_s, "SparseLab (true sparse)")]:
         ax.set_xlabel("training step")
         ax.set_title(title)
         ax.set_yscale("log")

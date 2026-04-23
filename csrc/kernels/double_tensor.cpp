@@ -16,7 +16,7 @@
 #include "double_tensor.hpp"
 
 
-namespace sparsecore {
+namespace sparselab {
 
 void double_tensor_scalar(const float* input, float* output, std::size_t n) {
     // We use 2.0f (float literal), not 2.0 (double literal). The `f` suffix
@@ -28,4 +28,4 @@ void double_tensor_scalar(const float* input, float* output, std::size_t n) {
     }
 }
 
-}  // namespace sparsecore
+}  // namespace sparselab

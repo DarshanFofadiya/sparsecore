@@ -1,11 +1,11 @@
-# SparseCore: Architecture & Project Overview
+# SparseLab: Architecture & Project Overview
 
-## Why SparseCore Exists
+## Why SparseLab Exists
 
 Current dynamic sparse training (DST) research forces a painful
 tradeoff: either use dense-simulated masks (wasting compute and memory
 on weights that are supposed to be zero) or spend weeks writing custom
-C++ kernels. SparseCore is a **PyTorch-native, actually-sparse DST
+C++ kernels. SparseLab is a **PyTorch-native, actually-sparse DST
 library** built for researchers in this space.
 
 The concrete offer:
@@ -30,7 +30,7 @@ laptop instead of a rented GPU.
 
 ## 1. The Target Application: Tiny-but-Credible Transformer
 
-SparseCore is built to train Transformers from scratch using dynamic
+SparseLab is built to train Transformers from scratch using dynamic
 sparsity on commodity hardware.
 
 - **v0.1 target:** 10M-parameter character-level decoder-only
@@ -63,7 +63,7 @@ explicitly out of scope for v0.1 and lives on the v0.2/v0.3 roadmap.
 
 We are building a PyTorch extension, not a standalone framework.
 
-- **The UX:** `sparsecore.SparseLinear(d_in, d_out, sparsity=0.9)` is a 100% drop-in replacement for `nn.Linear`. Same initialization surface, same forward/backward contract, same `state_dict` integration.
+- **The UX:** `sparselab.SparseLinear(d_in, d_out, sparsity=0.9)` is a 100% drop-in replacement for `nn.Linear`. Same initialization surface, same forward/backward contract, same `state_dict` integration.
 - **The Integration:** `torch.autograd.Function` bridges our C++ SIMD kernels into PyTorch's autograd graph. No custom autograd engine.
 - **The Matrix Shape:** Transformers process batched sequences. Our core C++ kernel optimizes for **Batched SpMM**: `(d_out, d_in) sparse × (B·S, d_in)` dense → `(B·S, d_out)` dense.
 
@@ -121,13 +121,13 @@ API, SET, RigL, end-to-end transformer training. Delivered;
 The project ships to the community when all of these are true:
 
 1. A standard PyTorch `nn.Module` can swap `nn.Linear` →
-   `sparsecore.SparseLinear` with a one-keyword change.
+   `sparselab.SparseLinear` with a one-keyword change.
 2. A 10M-param decoder-only transformer trains end-to-end on a
    character-level task at 90% FFN sparsity, tracking the dense
    baseline's loss curve within reasonable tolerance.
 3. `Static`, `SET`, `RigL` all work as `SparsityAlgorithm` subclasses.
 4. Kernels pass the Oracle suite at 1e-5 tolerance (372 tests today).
-5. `pip install sparsecore` works on macOS arm64, macOS x86_64,
+5. `pip install sparselab` works on macOS arm64, macOS x86_64,
    Linux x86_64, Linux aarch64 — wheels published to PyPI with
    libomp bundled inside.
 6. README, LANDSCAPE, and demo writeups are polished enough that a
@@ -144,7 +144,7 @@ Not part of v0.1 DoD (and called out as such):
 ## 8. Directory Layout (as shipped)
 
 ```
-sparsecore/
+sparselab/
 ├── docs/
 │   ├── PROJECT_OVERVIEW.md         # this file
 │   ├── LANDSCAPE.md                # ecosystem audit
@@ -169,7 +169,7 @@ sparsecore/
 │       ├── dense_grad.{hpp,cpp}    # RigL's dense-grad stall kernel
 │       ├── vector_dot{_neon}.{hpp,cpp}
 │       └── parallel.hpp            # OpenMP shim
-├── sparsecore/                     # Python package
+├── sparselab/                     # Python package
 │   ├── __init__.py                 # attaches Python factories to C++ class
 │   ├── layout.py                   # PaddedCSR factories + transpose
 │   ├── ops.py                      # spmm + autograd Function

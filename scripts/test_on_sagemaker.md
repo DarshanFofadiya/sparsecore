@@ -1,4 +1,4 @@
-# Testing SparseCore on SageMaker (Linux x86_64 and Graviton aarch64)
+# Testing SparseLab on SageMaker (Linux x86_64 and Graviton aarch64)
 
 This is the heavy-duty fresh-machine test — run before tagging a
 release if we want to be paranoid about the Linux wheels working on
@@ -26,8 +26,8 @@ check without an AWS bill.
 3. Open a terminal.
 4. Run:
    ```bash
-   pip install sparsecore
-   curl -sSL https://raw.githubusercontent.com/DarshanFofadiya/sparsecore/main/scripts/smoke_test.py \
+   pip install sparselab
+   curl -sSL https://raw.githubusercontent.com/DarshanFofadiya/sparselab/main/scripts/smoke_test.py \
      -o smoke_test.py
    python smoke_test.py
    ```
@@ -53,10 +53,10 @@ type (e.g., Graviton for the aarch64 wheel):
 4. Kernel: `conda_python3` (Python 3.11-ish, x86_64).
 5. In a notebook cell:
    ```python
-   !pip install sparsecore
+   !pip install sparselab
    import urllib.request
    urllib.request.urlretrieve(
-       "https://raw.githubusercontent.com/DarshanFofadiya/sparsecore/main/scripts/smoke_test.py",
+       "https://raw.githubusercontent.com/DarshanFofadiya/sparselab/main/scripts/smoke_test.py",
        "smoke_test.py",
    )
    !python smoke_test.py
@@ -93,7 +93,7 @@ AWS's.
 
 ## Troubleshooting
 
-**"No matching distribution found for sparsecore"**
+**"No matching distribution found for sparselab"**
 - Check you're on a supported platform (Linux x86_64 or aarch64).
 - If you're on something else, the install falls back to source and
   needs a compiler: `pip install build-essential` (Debian) or

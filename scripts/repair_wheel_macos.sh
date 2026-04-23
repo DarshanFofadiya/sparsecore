@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────
-# repair_wheel_macos.sh — minimal wheel repair for SparseCore macOS
+# repair_wheel_macos.sh — minimal wheel repair for SparseLab macOS
 #
 # Called by cibuildwheel's repair-wheel-command on macOS runners.
 #
@@ -22,7 +22,7 @@
 #      machine. That's ~20 lines of otool + install_name_tool, simpler
 #      than working around delocate.
 #
-# At runtime: sparsecore/__init__.py imports torch first, which loads
+# At runtime: sparselab/__init__.py imports torch first, which loads
 # torch's libomp.dylib. When _core.so loads, its @rpath/libomp.dylib
 # reference resolves to the already-loaded torch libomp. One copy in
 # the process. No collision.
@@ -56,9 +56,9 @@ unzip -q "$WHEEL"
 
 # Find the .so file. There should be exactly one per wheel, but glob in
 # case future builds produce more.
-SO_FILE=$(find sparsecore -name "_core*.so" | head -n 1)
+SO_FILE=$(find sparselab -name "_core*.so" | head -n 1)
 if [[ -z "$SO_FILE" ]]; then
-    echo "ERROR: could not find sparsecore/_core*.so in the wheel"
+    echo "ERROR: could not find sparselab/_core*.so in the wheel"
     exit 1
 fi
 echo "── Step 2: rewriting install names in $SO_FILE"
@@ -85,7 +85,7 @@ fi
 
 # Step 2b: add the rpath that lets the dynamic loader find torch's
 # libomp at runtime.
-#   sparsecore/_core.so lives at <site-packages>/sparsecore/_core.so
+#   sparselab/_core.so lives at <site-packages>/sparselab/_core.so
 #   torch's libomp lives at <site-packages>/torch/lib/libomp.dylib
 #   So @loader_path/../torch/lib resolves correctly.
 add_rpath_if_missing() {

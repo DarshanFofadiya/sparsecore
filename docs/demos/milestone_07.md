@@ -6,10 +6,10 @@ The `SparsityAlgorithm` base class + `Static` reference implementation.
 This is the pluggable contract every DST algorithm will fit into:
 
 ```python
-import sparsecore
+import sparselab
 
-layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
-algo = sparsecore.Static(sparsity=0.9)
+layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
+algo = sparselab.Static(sparsity=0.9)
 layer.apply(algo)                 # or model.apply(algo) on a whole MLP
 ```
 
@@ -65,12 +65,12 @@ ergonomics come for free:
 ```python
 class MyMLP(nn.Module):
     def __init__(self):
-        self.fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+        self.fc1 = sparselab.SparseLinear(784, 512, sparsity=0.9)
         self.fc2 = nn.Linear(512, 10)  # dense — skipped
-        self.fc3 = sparsecore.SparseLinear(10, 1, sparsity=0.5)
+        self.fc3 = sparselab.SparseLinear(10, 1, sparsity=0.5)
 
 model = MyMLP()
-algo = sparsecore.Static(sparsity=0.9)
+algo = sparselab.Static(sparsity=0.9)
 model.apply(algo)
 # algo.layers is now [model.fc1, model.fc3] — dense layers skipped.
 ```
@@ -80,8 +80,8 @@ model.apply(algo)
 | File | What | Lines |
 |------|------|-------|
 | `docs/design/router.md` | Design doc (Cerebras prior art analysis, class hierarchy, decisions deferred) | ~220 |
-| `sparsecore/router.py`  | `SparsityAlgorithm` + `Static` | ~180 (half comments) |
-| `sparsecore/__init__.py` | Public re-exports | +2 lines |
+| `sparselab/router.py`  | `SparsityAlgorithm` + `Static` | ~180 (half comments) |
+| `sparselab/__init__.py` | Public re-exports | +2 lines |
 | `tests/test_router.py`  | 14 tests covering the API contract | ~210 |
 
 Full test suite now: **313 passed, 2 skipped** (was 299 before 4d).

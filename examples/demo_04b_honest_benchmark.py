@@ -41,9 +41,9 @@ import warnings
 import numpy as np
 import torch
 
-import sparsecore
-from sparsecore import PaddedCSR
-from sparsecore.ops import _SpMMFunction
+import sparselab
+from sparselab import PaddedCSR
+from sparselab.ops import _SpMMFunction
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -208,7 +208,7 @@ def print_header():
     print()
     print("═" * 96)
     print(
-        f"SparseCore demo 4b — Honest training-step benchmark "
+        f"SparseLab demo 4b — Honest training-step benchmark "
         f"(matmul vs matmul, no nn.Module overhead)"
     )
     print(

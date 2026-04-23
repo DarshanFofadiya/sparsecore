@@ -13,7 +13,7 @@ This is deliberately the least impressive milestone in the project. The operatio
 ## How to run it
 
 ```bash
-conda activate sparsecore
+conda activate sparselab
 python examples/demo_01_bridge.py
 ```
 

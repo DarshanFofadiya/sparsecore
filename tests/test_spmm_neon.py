@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 import torch
 
-from sparsecore import PaddedCSR, _core
+from sparselab import PaddedCSR, _core
 
 
 @pytest.fixture(autouse=True)

@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 import torch
 
-from sparsecore import _core
+from sparselab import _core
 
 
 # Our standard tolerance for float32 reductions.

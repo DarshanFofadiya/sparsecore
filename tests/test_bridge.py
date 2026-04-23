@@ -2,7 +2,7 @@
 Milestone 1 Oracle tests — the PyTorch/C++ bridge.
 
 These tests verify the C++/Python plumbing works end-to-end. They don't
-test sparsity, SIMD, or any SparseCore-specific logic — just that bytes
+test sparsity, SIMD, or any SparseLab-specific logic — just that bytes
 can cross the FFI boundary and math-through-C++ matches math-through-PyTorch
 to floating-point tolerance.
 
@@ -32,21 +32,21 @@ ORACLE_ATOL = 1e-5
 # ─────────────────────────────────────────────────────────────────────
 
 
-def test_sparsecore_package_imports():
-    """The `sparsecore` Python package is on the path and imports cleanly."""
-    import sparsecore  # noqa: F401 — we're testing that import itself works
+def test_sparselab_package_imports():
+    """The `sparselab` Python package is on the path and imports cleanly."""
+    import sparselab  # noqa: F401 — we're testing that import itself works
 
 
 def test_core_module_imports():
-    """The compiled C++ module `sparsecore._core` loads."""
-    from sparsecore import _core  # noqa: F401
+    """The compiled C++ module `sparselab._core` loads."""
+    from sparselab import _core  # noqa: F401
 
 
 def test_double_tensor_is_registered():
     """`double_tensor` is exposed on the `_core` module."""
-    from sparsecore import _core
+    from sparselab import _core
     assert hasattr(_core, "double_tensor"), (
-        "C++ function `double_tensor` is missing from sparsecore._core. "
+        "C++ function `double_tensor` is missing from sparselab._core. "
         "Check that PYBIND11_MODULE(_core, m) in csrc/bindings.cpp calls "
         "m.def(\"double_tensor\", ...)."
     )
@@ -54,7 +54,7 @@ def test_double_tensor_is_registered():
 
 def test_double_tensor_is_callable():
     """The registered symbol is actually a callable, not e.g. a type."""
-    from sparsecore import _core
+    from sparselab import _core
     assert callable(_core.double_tensor)
 
 
@@ -86,7 +86,7 @@ def _double_via_cpp(x_torch: torch.Tensor) -> torch.Tensor:
     binding accepts; non-contiguous tensors are handled by np.ascontiguousarray.
     """
     x_np = np.ascontiguousarray(x_torch.detach().numpy(), dtype=np.float32)
-    from sparsecore import _core
+    from sparselab import _core
     y_np = _core.double_tensor(x_np)
     return torch.from_numpy(y_np)
 
@@ -167,7 +167,7 @@ def test_input_not_mutated():
 def test_output_is_independent_memory():
     """Output array has its own memory — mutating the output doesn't affect input."""
     x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-    from sparsecore import _core
+    from sparselab import _core
     y = _core.double_tensor(x)
     # Modify the output array. If output shares memory with input, this breaks x.
     y[0] = 999.0
@@ -186,7 +186,7 @@ def test_output_is_independent_memory():
 def test_determinism():
     """Two calls on the same input produce identical results (no uninit memory)."""
     x = np.arange(100, dtype=np.float32)
-    from sparsecore import _core
+    from sparselab import _core
     y1 = _core.double_tensor(x)
     y2 = _core.double_tensor(x)
     assert np.array_equal(y1, y2), (

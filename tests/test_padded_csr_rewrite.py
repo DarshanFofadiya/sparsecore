@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 import torch
 
-import sparsecore
-from sparsecore import PaddedCSR
+import sparselab
+from sparselab import PaddedCSR
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -186,5 +186,5 @@ def test_spmm_sees_rewritten_rows():
 
     # Run forward. Y[1, j] should equal 7 * X[2, j].
     X = torch.ones(5, 4) * 2.0    # every entry = 2.0
-    Y = sparsecore.spmm(W, X)
+    Y = sparselab.spmm(W, X)
     assert Y[1].allclose(torch.full((4,), 14.0))  # 7 * 2 = 14

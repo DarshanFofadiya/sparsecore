@@ -1,7 +1,7 @@
 # Design: SpMM (Sparse × Dense Matrix Multiplication)
 
 **Status:** Draft — design for Milestone 3c (scalar) and 3d (NEON)
-**Owner:** SparseCore project
+**Owner:** SparseLab project
 **Prerequisites:** `docs/design/padded_csr.md` (the storage format this kernel reads)
 
 ---
@@ -13,7 +13,7 @@ SpMM computes `Y = W @ X` where:
 - `X` is a dense activations matrix, shape `(K, N)`
 - `Y` is a dense output matrix, shape `(M, N)`
 
-This is the **forward pass of every linear layer in a neural network**. When Phase 4 wraps SparseCore into `SparseLinear(nn.Module)`, its `forward()` will call this kernel.
+This is the **forward pass of every linear layer in a neural network**. When Phase 4 wraps SparseLab into `SparseLinear(nn.Module)`, its `forward()` will call this kernel.
 
 ### 1.1 Why not sparse-sparse?
 
@@ -29,7 +29,7 @@ We deliberately don't ship a dense matmul. Our competitive claim is at the spars
 ## 2. The Python API
 
 ```python
-from sparsecore import PaddedCSR, spmm
+from sparselab import PaddedCSR, spmm
 
 W = PaddedCSR.from_dense(torch.randn(1024, 512) * mask)  # sparse (M, K)
 X = torch.randn(512, 128, dtype=torch.float32)           # dense   (K, N)
@@ -110,7 +110,7 @@ Alignment: float32 arrays are naturally 4-byte aligned by `std::vector<float>` /
 ## 5. C++ Function Signature
 
 ```cpp
-namespace sparsecore {
+namespace sparselab {
 
 // Scalar reference implementation (Milestone 3c).
 // Output must be pre-allocated with shape (M, N) and pre-zeroed.
@@ -127,7 +127,7 @@ void spmm_simd_neon(
     float* Y
 );
 
-}  // namespace sparsecore
+}  // namespace sparselab
 ```
 
 Note the kernel takes pre-zeroed output memory — the Python binding is responsible for allocation. This keeps the kernel focused on math.
@@ -139,10 +139,10 @@ The binding in `csrc/bindings.cpp` will:
 1. Accept `PaddedCSR` and a `torch.Tensor`-compatible `X` (unwrapped via pybind11's `py::array_t<float>` with `c_style | forcecast`).
 2. Validate shapes (`W.ncols == X.shape[0]`, `X.ndim == 2`).
 3. Allocate output `Y` as a fresh numpy array of shape `(M, N)`, zero-initialized.
-4. Call `sparsecore::spmm_scalar(...)` or `sparsecore::spmm_simd_neon(...)`.
+4. Call `sparselab::spmm_scalar(...)` or `sparselab::spmm_simd_neon(...)`.
 5. Return `Y` wrapped as a NumPy array. Python-side, the user converts back to torch via `torch.from_numpy(Y)` if desired — or we can auto-convert at the public API level.
 
-**Public Python surface** (in `sparsecore/__init__.py`):
+**Public Python surface** (in `sparselab/__init__.py`):
 
 ```python
 def spmm(W: PaddedCSR, X: torch.Tensor, *, kernel: str = "auto") -> torch.Tensor:

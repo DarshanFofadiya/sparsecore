@@ -22,7 +22,7 @@
 #include <vector>
 
 
-namespace sparsecore {
+namespace sparselab {
 
 // ─────────────────────────────────────────────────────────────────────────
 //  PaddedCSR: sparse matrix with padded rows for fast insertion.
@@ -166,4 +166,4 @@ struct PaddedCSR {
 std::string check_invariants_str(const PaddedCSR& p);
 void assert_invariants(const PaddedCSR& p);
 
-}  // namespace sparsecore
+}  // namespace sparselab

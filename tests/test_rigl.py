@@ -1,5 +1,5 @@
 """
-Tests for sparsecore.RigL (milestone 4f).
+Tests for sparselab.RigL (milestone 4f).
 
 RigL is similar to SET, with the same DynamicSparsityAlgorithm base,
 but a smarter grow criterion: grow at positions where the dense
@@ -21,8 +21,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import sparsecore
-from sparsecore import RigL, SparseLinear, Static
+import sparselab
+from sparselab import RigL, SparseLinear, Static
 
 
 # Silence the benign "Full backward hook is firing..." warning that

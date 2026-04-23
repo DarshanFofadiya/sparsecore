@@ -23,8 +23,8 @@ import numpy as np
 import pytest
 import torch
 
-import sparsecore
-from sparsecore import _core, PaddedCSR
+import sparselab
+from sparselab import _core, PaddedCSR
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ def test_large_spmm_runs_without_segfault():
     had a thread-local lifetime bug, this would tend to segfault.
     """
     torch.manual_seed(0)
-    layer = sparsecore.SparseLinear(1024, 2048, sparsity=0.9)
+    layer = sparselab.SparseLinear(1024, 2048, sparsity=0.9)
     x = torch.randn(64, 1024)
     for _ in range(3):
         y = layer(x)

@@ -22,7 +22,7 @@
 #include "padded_csr.hpp"
 
 
-namespace sparsecore {
+namespace sparselab {
 
 // ─────────────────────────────────────────────────────────────────────────
 //  spmm_grad_w — dL/dW at live slots only.
@@ -67,4 +67,4 @@ void spmm_grad_w(
     float* dW_values
 );
 
-}  // namespace sparsecore
+}  // namespace sparselab

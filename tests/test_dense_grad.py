@@ -9,8 +9,8 @@ tests are mostly oracle tests against numpy's dense matmul.
 import numpy as np
 import pytest
 
-import sparsecore
-from sparsecore import _core
+import sparselab
+from sparselab import _core
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ def test_dense_grad_matches_spmm_grad_w_at_live_positions():
     W.values). dense_grad gives us the FULL (M, K) gradient. For
     live positions these MUST agree — same math."""
     np.random.seed(0)
-    W = sparsecore.PaddedCSR.random(8, 12, sparsity=0.6, seed=0)
+    W = sparselab.PaddedCSR.random(8, 12, sparsity=0.6, seed=0)
     dY = np.random.randn(8, 6).astype(np.float32)
     X = np.random.randn(12, 6).astype(np.float32)
 

@@ -15,7 +15,7 @@ trajectories when they're mathematically equivalent.
 ## How to run
 
 ```bash
-pip install sparsecore[demos]
+pip install sparselab[demos]
 python examples/demo_05_mnist.py
 ```
 
@@ -23,7 +23,7 @@ python examples/demo_05_mnist.py
 
 ## Results (M3 Pro, 3 epochs, 512-unit hidden layer)
 
-As of milestone 4b the sparse path uses `sparsecore.SparseLinear`. The
+As of milestone 4b the sparse path uses `sparselab.SparseLinear`. The
 numbers below are from that rerun. They drift <0.2 pp from the
 pre-4b manual-`_SpMMFunction.apply` implementation — the tiny drift
 comes from `SparseLinear` draining PyTorch's RNG in a slightly
@@ -93,7 +93,7 @@ with the random-and-fixed mask we're using.
 
 **Putting the MNIST 90% story in a sentence:**
 
-> At 90% sparsity on MNIST, the SparseCore sparse path reaches 97.45%
+> At 90% sparsity on MNIST, the SparseLab sparse path reaches 97.45%
 > test accuracy vs dense 98.06% — **a 0.61 pp gap for 82% memory
 > reduction, at the cost of 1.8× training epochs.**
 
@@ -212,7 +212,7 @@ mask at init, no mutation" approach. The RigL / SET literature shows
 you can largely close that gap by *moving* the 1% of active weights
 to where the data needs them, using gradient signals between training
 runs. That's milestones 4c (Router API) → 4d (SET) → 4e (RigL). Having
-a working DST regrow policy is how we tell the story "SparseCore
+a working DST regrow policy is how we tell the story "SparseLab
 matches dense up to 99%" in the launch blog.
 
 **The SparseLinear UX (milestone 4b) is still critical.** Even for
@@ -221,7 +221,7 @@ not the experience a researcher should have. After 4b lands, the
 demo becomes simple:
 
 ```python
-self.fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+self.fc1 = sparselab.SparseLinear(784, 512, sparsity=0.9)
 ```
 
 ## What landed

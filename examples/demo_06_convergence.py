@@ -29,7 +29,7 @@ How to run
 ──────────
     python examples/demo_06_convergence.py
 
-Needs: pip install sparsecore[demos]
+Needs: pip install sparselab[demos]
 
 Runtime: 30-45 minutes on M3 Pro.
 
@@ -59,16 +59,16 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
 try:
     from torchvision import datasets, transforms
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
-from sparsecore import PaddedCSR
-from sparsecore.ops import _SpMMFunction
+import sparselab
+from sparselab import PaddedCSR
+from sparselab.ops import _SpMMFunction
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -139,7 +139,7 @@ def evaluate_sparse(W_csr, fc2, test_loader):
         correct, total = 0, 0
         for imgs, labels in test_loader:
             x = imgs.view(imgs.size(0), -1).t()
-            h = F.relu(sparsecore.spmm(W_csr, x))
+            h = F.relu(sparselab.spmm(W_csr, x))
             logits = fc2.weight @ h
             correct += (logits.t().argmax(1) == labels).sum().item()
             total += labels.size(0)
@@ -266,7 +266,7 @@ def train_sparse_to_convergence(sparsity, train_loader, test_loader) -> Converge
 def print_header():
     print()
     print("═" * 90)
-    print("SparseCore demo 6 — Convergence to exhaustion")
+    print("SparseLab demo 6 — Convergence to exhaustion")
     print(
         f"Up to {MAX_EPOCHS} epochs with early stopping "
         f"(patience={PATIENCE} evals)  |  "

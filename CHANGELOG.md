@@ -1,11 +1,53 @@
 # Changelog
 
-All notable changes to SparseCore are documented here.
+All notable changes to SparseLab are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.2.0] — 2026-04-23
+
+**Renamed from `sparsecore` to `sparselab`.** No functional code changes.
+
+The original name collided with Google's TPU SparseCore hardware block
+(documented since 2020 across OpenXLA, Keras, and Google Cloud). Sharing
+a name with a well-established Google product is bad ergonomics for a
+library that aims to become the canonical community platform for
+dynamic sparse training — every mention would require a disambiguation
+paragraph, and search rankings would perpetually sit in Google's orbit.
+Renaming now, with zero external adopters, is cheap; renaming later
+would get progressively more expensive.
+
+### Changed
+- Package name: `sparsecore` → `sparselab`
+- Import statement: `import sparselab` (was `import sparsecore`)
+- GitHub repo: `DarshanFofadiya/sparsecore` → `DarshanFofadiya/sparselab`
+  (old URLs auto-redirect via GitHub)
+- PyPI project: new project `sparselab` on pypi.org. The old
+  `sparsecore` project on PyPI stays live for pinned installs; one
+  final `sparsecore` `0.1.2` release raises `ImportError` pointing at
+  the new name.
+- Environment variables (advanced opt-outs in setup.py):
+  `SPARSECORE_NO_OPENMP` → `SPARSELAB_NO_OPENMP`,
+  `SPARSECORE_LIBOMP_PREFIX` → `SPARSELAB_LIBOMP_PREFIX`
+
+### Fixed
+- Editable installs (`pip install -e .`) on macOS no longer abort with
+  `OMP: Error #15` when importing. The C++ extension's libomp
+  install name is now rewritten post-build (same approach
+  `scripts/repair_wheel_macos.sh` uses for published wheels) via a
+  `BuildExtWithRepair` class in `setup.py`. Two libomps in a process
+  used to abort OpenMP's runtime; now only one is loaded.
+
+### Migration
+- `pip install sparselab` and `import sparselab` everywhere you had
+  `sparsecore`. All public API names (`PaddedCSR`, `spmm`,
+  `SparseLinear`, `SparsityAlgorithm`, `SET`, `RigL`, `Static`,
+  `DynamicSparsityAlgorithm`) are unchanged.
+- Pinned to `sparsecore==0.1.1`? Your install keeps working. Future
+  development happens in `sparselab`.
 
 ## [0.1.1] — 2026-04-23
 
@@ -13,7 +55,7 @@ Maintenance release — notebook fix, documentation improvements, and
 a clearer story on Intel Mac support.
 
 ### Fixed
-- Colab notebook (`examples/colab_try_sparsecore.ipynb`): the
+- Colab notebook (`examples/colab_try_sparselab.ipynb`): the
   `KeepTopK` custom-algorithm example raised
   `ValueError: drop_fraction must be in (0.0, 1.0], got 0.0` because
   it subclassed `DynamicSparsityAlgorithm` (which is designed for
@@ -36,9 +78,9 @@ a clearer story on Intel Mac support.
   because `pip install` cannot resolve `torch>=2.8` on that platform:
   [upstream PyTorch deprecated macOS x86_64 wheels in January 2024](https://dev-discuss.pytorch.org/t/pytorch-macos-x86-builds-deprecation-starting-january-2024/1690)
   and the last torch macOS x86_64 wheel published is 2.2.2. Shipping
-  an Intel Mac sparsecore wheel would therefore be unusable — the
+  an Intel Mac sparselab wheel would therefore be unusable — the
   dependency cannot be installed from PyPI. Intel Mac users who need
-  sparsecore can still build from sdist with `torch<=2.2.2` pinned,
+  sparselab can still build from sdist with `torch<=2.2.2` pinned,
   but we don't ship a pre-built wheel for this platform. See the
   workflow header comment in `.github/workflows/wheels.yml` for the
   full reasoning. This replaces the vaguer "Intel runner retired"
@@ -50,21 +92,21 @@ a clearer story on Intel Mac support.
 First public release. The pluggable DST foundation.
 
 ### Added
-- `sparsecore.PaddedCSR` — sparse matrix storage with O(1) slot
+- `sparselab.PaddedCSR` — sparse matrix storage with O(1) slot
   insert, cached transpose, round-trip with `torch.sparse_csr`.
   Eight structural invariants checked by the C++ constructor.
-- `sparsecore.spmm(W, X)` — sparse-dense matmul, autograd-aware. NEON
+- `sparselab.spmm(W, X)` — sparse-dense matmul, autograd-aware. NEON
   path on ARM64, scalar path on x86. OpenMP parallelized across the
   outer row loop.
-- `sparsecore.SparseLinear(nn.Module)` — drop-in `nn.Linear`
+- `sparselab.SparseLinear(nn.Module)` — drop-in `nn.Linear`
   replacement. Standard `nn.Parameter`, standard `state_dict`,
   standard `torch.optim` compatibility.
-- `sparsecore.SparsityAlgorithm` — pluggable DST base class. Inspired
+- `sparselab.SparsityAlgorithm` — pluggable DST base class. Inspired
   by Cerebras's `cstorch.sparse.SparsityAlgorithm`.
-- `sparsecore.Static` — no-op reference sparsity algorithm.
-- `sparsecore.SET` — Sparse Evolutionary Training (Mocanu et al.,
+- `sparselab.Static` — no-op reference sparsity algorithm.
+- `sparselab.SET` — Sparse Evolutionary Training (Mocanu et al.,
   2018) with magnitude-based drop and random regrow.
-- `sparsecore.RigL` — Rigging the Lottery (Evci et al., 2020) with
+- `sparselab.RigL` — Rigging the Lottery (Evci et al., 2020) with
   gradient-based regrow.
 - 372 tests including gradcheck against PyTorch autograd and
   dense-equivalence oracles at 1e-5 tolerance.
@@ -74,7 +116,7 @@ First public release. The pluggable DST foundation.
   and Linux aarch64 across Python 3.11, 3.12, 3.13. libomp bundled
   inside the wheels — no `brew install libomp` needed for
   `pip install` users.
-- Colab notebook (`examples/colab_try_sparsecore.ipynb`) for zero-
+- Colab notebook (`examples/colab_try_sparselab.ipynb`) for zero-
   setup exploration.
 - Docker-based fresh-install test (`scripts/test_fresh_install.sh`)
   and SageMaker recipe (`scripts/test_on_sagemaker.md`).
@@ -92,12 +134,12 @@ First public release. The pluggable DST foundation.
   target (~1.3–1.5× end-to-end at FFN scale).
 - Transpose cache uses `id(W)` as its key; there's a theoretical
   collision risk if Python GC reuses an id for a new same-shape
-  PaddedCSR. Documented in `sparsecore/ops.py`.
+  PaddedCSR. Documented in `sparselab/ops.py`.
 - Sparse attention works but is not a first-class API (see
   `examples/demo_14_sparse_attention.py`).
 
 ### Acknowledgments
-- `sparsecore.SparsityAlgorithm` API shape is adopted from Cerebras's
+- `sparselab.SparsityAlgorithm` API shape is adopted from Cerebras's
   `cstorch.sparse.SparsityAlgorithm` (see `docs/LANDSCAPE.md` for the
   full comparison).
 - The Padded-CSR layout and the NEON SpMM / dW / dense-grad kernels

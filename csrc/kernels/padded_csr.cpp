@@ -11,7 +11,7 @@
 #include <stdexcept>  // std::invalid_argument
 
 
-namespace sparsecore {
+namespace sparselab {
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Empty constructor: zero-capacity matrix of given shape.
@@ -295,4 +295,4 @@ void PaddedCSR::rewrite_row(
     topology_version += 1;
 }
 
-}  // namespace sparsecore
+}  // namespace sparselab

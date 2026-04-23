@@ -5,7 +5,7 @@ What this demo proves
 ─────────────────────
 Everything from milestones 1-3 was forward-pass only. This is the first
 demo where loss.backward() actually works on a sparse layer — the moment
-SparseCore crosses from "compute engine" to "training framework."
+SparseLab crosses from "compute engine" to "training framework."
 
 We set up a trivial regression task:
     y = W_true @ x + ε
@@ -13,7 +13,7 @@ We set up a trivial regression task:
 where W_true is a fixed random matrix. Then we train TWO models to fit
 this relationship:
   1. A dense nn.Linear (PyTorch's built-in, all 8,192 params learnable)
-  2. Our SparseCore forward/backward (only live-slot params learnable)
+  2. Our SparseLab forward/backward (only live-slot params learnable)
 
 Both run 200 steps of SGD. The loss curve is what you watch.
 
@@ -44,9 +44,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-import sparsecore
-from sparsecore import PaddedCSR
-from sparsecore.ops import _SpMMFunction
+import sparselab
+from sparselab import PaddedCSR
+from sparselab.ops import _SpMMFunction
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -119,14 +119,14 @@ def train_dense(X: torch.Tensor, Y_target: torch.Tensor) -> list[float]:
 
 
 # ─────────────────────────────────────────────────────────────────────
-#  Sparse training — our SparseCore path
+#  Sparse training — our SparseLab path
 # ─────────────────────────────────────────────────────────────────────
 
 def train_sparse(X: torch.Tensor, Y_target: torch.Tensor) -> tuple[list[float], PaddedCSR, torch.Tensor]:
     """
     Train a sparse W (90% zeros) to fit the targets. Uses our custom
     autograd Function — loss.backward() flows through spmm_grad_w and
-    spmm_simd(Wᵀ) entirely through SparseCore.
+    spmm_simd(Wᵀ) entirely through SparseLab.
 
     Returns (losses, final_W_csr, final_W_values_tensor).
     """
@@ -182,7 +182,7 @@ def train_sparse(X: torch.Tensor, Y_target: torch.Tensor) -> tuple[list[float], 
 def print_header():
     print()
     print("═" * 70)
-    print("SparseCore demo 4 — End-to-end sparse training with autograd")
+    print("SparseLab demo 4 — End-to-end sparse training with autograd")
     print(
         f"W shape: ({M}, {K})  |  "
         f"sparsity: {SPARSITY * 100:.0f}%  |  "

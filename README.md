@@ -1,11 +1,11 @@
-# SparseCore
+# SparseLab
 
-![v0.1](https://img.shields.io/badge/version-0.1.1-blue)
+![v0.2](https://img.shields.io/badge/version-0.2.0-blue)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![PyPI](https://img.shields.io/pypi/v/sparsecore)
+![PyPI](https://img.shields.io/pypi/v/sparselab)
 ![tests](https://img.shields.io/badge/tests-372%20passing-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DarshanFofadiya/sparsecore/blob/main/examples/colab_try_sparsecore.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DarshanFofadiya/sparselab/blob/main/examples/colab_try_sparselab.ipynb)
 
 **Masking is not sparsity.**
 
@@ -13,7 +13,7 @@
 
 ## TL;DR — the 60-second read
 
-SparseCore is a PyTorch library for training sparse neural networks
+SparseLab is a PyTorch library for training sparse neural networks
 *from scratch*, with real sparse storage and real sparse kernels.
 Not mask-on-dense. Not post-training pruning. Actual sparsity
 at training time, on commodity hardware.
@@ -46,14 +46,14 @@ at training time, on commodity hardware.
 
 - **It's also a hardware problem, not just software.** GPUs are
   built for dense; sparse accelerators have no training stack to
-  target. SparseCore is the software the hardware ecosystem has
+  target. SparseLab is the software the hardware ecosystem has
   been waiting for.
 
 **For whom:** DST researchers. PyTorch users without GPU access.
 Contributors who care about low-level CPU performance. Anyone
 building toward purpose-built sparse hardware.
 
-**Get it:** `pip install sparsecore`. Pre-built wheels for macOS
+**Get it:** `pip install sparselab`. Pre-built wheels for macOS
 arm64 and Linux x86_64/aarch64, Python 3.11–3.13. MIT license.
 372 tests including autograd gradcheck.
 
@@ -66,7 +66,7 @@ gap:
 
 | Project | Storage | Training | Hardware | `pip install` on a laptop |
 |-|-|-|-|-|
-| **SparseCore** (us) | **Real sparse (Padded-CSR)** | **From scratch, pluggable DST** | **CPU (NEON + OpenMP)** | **Yes** |
+| **SparseLab** (us) | **Real sparse (Padded-CSR)** | **From scratch, pluggable DST** | **CPU (NEON + OpenMP)** | **Yes** |
 | Cerebras `cstorch.sparse` | Dense + mask | From scratch, pluggable DST | Wafer-scale only | No |
 | Neural Magic SparseML | Dense + mask | Post-training pruning | CPU (inference) | Yes (inference only) |
 | rigl-torch | Dense + mask | From scratch, RigL only | CPU/GPU | Yes (mask-simulated) |
@@ -121,7 +121,7 @@ run sparse training as a drop-in is that nobody's shipped a
 software stack that treats sparsity as first-class at training
 time.
 
-That's the problem SparseCore is built to solve.
+That's the problem SparseLab is built to solve.
 
 ---
 
@@ -133,7 +133,7 @@ Two things have to be true for sparse to win:
    a mask over a dense tensor. Not a post-training step. The
    storage format, kernels, autograd integration, and training
    loop all have to work with live weights directly. That's what
-   SparseCore is.
+   SparseLab is.
 
 2. **The hardware has to be built for it.** Current GPUs are
    engineered for the dense-matmul workload and they optimize it
@@ -144,7 +144,7 @@ Two things have to be true for sparse to win:
    about for a decade — have no training software to target, so
    they stay theoretical.
 
-SparseCore's bet is that the software stack has to exist first,
+SparseLab's bet is that the software stack has to exist first,
 so the hardware has something real to optimize for.
 
 The brain runs on roughly **20 watts** — about a dim light bulb.
@@ -174,7 +174,7 @@ What becomes possible on top of this foundation:
   optimization PR is a speedup everyone inherits.
 - **Purpose-built sparse hardware has a software stack to target.**
   Sparse accelerators have been a research topic for 10+ years;
-  SparseCore is the first real end-to-end sparse training stack
+  SparseLab is the first real end-to-end sparse training stack
   they can plug into.
 
 ---
@@ -253,7 +253,7 @@ purpose-built for it. Not general-purpose GPUs doing sparse poorly,
 not wafer-scale chips with dense-mask simulation — actual sparse
 accelerators that match the brain's efficiency profile. The
 neuromorphic industry wants this. The problem is nobody has a
-training stack to target. SparseCore intends to be that stack.
+training stack to target. SparseLab intends to be that stack.
 
 We're not claiming to beat GPUs today. We are claiming the
 paradigm is wrong, and that CPU-native actually-sparse training
@@ -284,18 +284,18 @@ eventually scale into specialized hardware.
 
 ```python
 import torch
-import sparsecore
+import sparselab
 
-# One-line swap: nn.Linear → sparsecore.SparseLinear.
+# One-line swap: nn.Linear → sparselab.SparseLinear.
 model = torch.nn.Sequential(
-    sparsecore.SparseLinear(784, 512, sparsity=0.9),
+    sparselab.SparseLinear(784, 512, sparsity=0.9),
     torch.nn.ReLU(),
     torch.nn.Linear(512, 10),
 )
 opt = torch.optim.SGD(model.parameters(), lr=0.01)
 
 # Pluggable DST: add SET topology mutation in 2 lines.
-algo = sparsecore.SET(sparsity=0.9, drop_fraction=0.3, update_freq=100)
+algo = sparselab.SET(sparsity=0.9, drop_fraction=0.3, update_freq=100)
 model.apply(algo)        # attaches to every SparseLinear in the tree
 
 # Rest of your training loop is normal PyTorch.
@@ -319,11 +319,11 @@ sparse kernels.
 
 ```python
 import torch
-import sparsecore
+import sparselab
 
 # A 784 × 512 layer, dense vs 90% sparse.
 dense  = torch.nn.Linear(784, 512, bias=False)
-sparse = sparsecore.SparseLinear(784, 512, sparsity=0.9, bias=False)
+sparse = sparselab.SparseLinear(784, 512, sparsity=0.9, bias=False)
 
 # Dense: 4 bytes per weight (float32).
 dense_bytes = dense.weight.numel() * 4
@@ -351,7 +351,7 @@ actually sparse; it's also why the break-even point is around
 ## Install
 
 ```bash
-pip install sparsecore
+pip install sparselab
 ```
 
 Pre-built wheels are published for the following platforms, with
@@ -385,11 +385,11 @@ compiling from source. For that you'll need:
 
 ### Development install
 
-For hacking on SparseCore itself:
+For hacking on SparseLab itself:
 
 ```bash
-git clone https://github.com/DarshanFofadiya/sparsecore.git
-cd sparsecore
+git clone https://github.com/DarshanFofadiya/sparselab.git
+cd sparselab
 brew install libomp        # macOS only
 pip install -e '.[dev]'
 ```
@@ -400,14 +400,14 @@ file in `csrc/`. First build takes ~45 seconds.
 ### Verify install
 
 ```python
-import sparsecore
-print(sparsecore.__version__)          # should print 0.1.0 or newer
+import sparselab
+print(sparselab.__version__)          # should print 0.2.0 or newer
 
 # Quick smoke test — this should run in under a second
 import torch
-W = sparsecore.PaddedCSR.random(256, 128, sparsity=0.9, seed=0)
+W = sparselab.PaddedCSR.random(256, 128, sparsity=0.9, seed=0)
 X = torch.randn(128, 32)
-Y = sparsecore.spmm(W, X)
+Y = sparselab.spmm(W, X)
 print(Y.shape)                          # torch.Size([256, 32])
 ```
 
@@ -418,7 +418,7 @@ pytest
 # 372 passed in ~3s
 ```
 
-If something doesn't work, please [open an issue with the output](https://github.com/DarshanFofadiya/sparsecore/issues)
+If something doesn't work, please [open an issue with the output](https://github.com/DarshanFofadiya/sparselab/issues)
 — v0.1 is the first time other people are installing this, so we
 want to hear about failures.
 
@@ -427,7 +427,7 @@ want to hear about failures.
 Most install failures fall into one of five categories. The error
 message is usually enough to pick the right fix.
 
-**`ERROR: Could not find a version that satisfies the requirement sparsecore`**
+**`ERROR: Could not find a version that satisfies the requirement sparselab`**
 
 pip can't find a wheel that matches your platform. Run
 `pip debug --verbose` and check the "Compatible tags" list. Your
@@ -443,7 +443,7 @@ Common causes:
   platform because upstream PyTorch stopped publishing Intel Mac
   wheels after torch 2.2.2. Your options: (a) use a machine with an
   Apple Silicon Mac or a Linux host, or (b) install from sdist with
-  an older torch pinned: `pip install torch==2.2.2 && pip install sparsecore --no-binary sparsecore` (requires a C++ toolchain).
+  an older torch pinned: `pip install torch==2.2.2 && pip install sparselab --no-binary sparselab` (requires a C++ toolchain).
 - **Free-threaded Python 3.13t (PEP 703).** Its tags are `cp313t-...`,
   not `cp313-...`, so our wheels don't match. Use a regular (GIL-enabled)
   CPython 3.11/3.12/3.13 for now.
@@ -456,19 +456,19 @@ Common causes:
 
 Your virtualenv is pointing at a Python binary that no longer exists
 — a stale venv from a Python upgrade or a deleted project. Not a
-sparsecore problem. Recreate the venv:
+sparselab problem. Recreate the venv:
 
 ```bash
-python3 -m venv ~/my-sparsecore-env
-source ~/my-sparsecore-env/bin/activate
-pip install sparsecore
+python3 -m venv ~/my-sparselab-env
+source ~/my-sparselab-env/bin/activate
+pip install sparselab
 ```
 
 **macOS: `Symbol not found` or `OMP: Error #15: Initializing libomp.dylib`**
 
 If you see this on import, two copies of libomp are being loaded in
 the same process. Our wheel is designed to reuse torch's libomp, so
-this shouldn't happen from `pip install sparsecore` alone. Most
+this shouldn't happen from `pip install sparselab` alone. Most
 likely you have a non-standard `DYLD_LIBRARY_PATH` or a global libomp
 install that the dynamic loader is finding first. Try a fresh venv
 with no environment overrides.
@@ -533,13 +533,13 @@ pip install -e '.[demos]'
 
 ## What works today
 
-- `sparsecore.PaddedCSR` — sparse storage with O(1) slot insert,
+- `sparselab.PaddedCSR` — sparse storage with O(1) slot insert,
   cached transpose, round-trip with `torch.sparse_csr`.
-- `sparsecore.spmm(W, X)` — sparse-dense matmul with NEON + OpenMP,
+- `sparselab.spmm(W, X)` — sparse-dense matmul with NEON + OpenMP,
   autograd-aware.
-- `sparsecore.SparseLinear(nn.Module)` — drop-in `nn.Linear`
+- `sparselab.SparseLinear(nn.Module)` — drop-in `nn.Linear`
   replacement. Standard `nn.Parameter`, standard `state_dict`.
-- `sparsecore.SparsityAlgorithm`, `Static`, `SET`, `RigL` — pluggable
+- `sparselab.SparsityAlgorithm`, `Static`, `SET`, `RigL` — pluggable
   DST API. Inspired by Cerebras's `cstorch.sparse.SparsityAlgorithm`;
   see `docs/LANDSCAPE.md`.
 - 372 tests, including gradcheck against PyTorch autograd and
@@ -557,7 +557,7 @@ pip install -e '.[demos]'
 - **Transpose cache has a theoretical `id()` collision risk** when a
   `PaddedCSR` is garbage-collected and Python reuses its id for a new
   same-shape, same-topology-version CSR. Documented in
-  `sparsecore/ops.py`; has not been observed in practice but is real.
+  `sparselab/ops.py`; has not been observed in practice but is real.
 - **`dW` kernel isn't NEON-vectorized yet** — it relies on Clang's
   auto-vectorization at `-O3`. A hand-tuned NEON dW is the top v0.2
   speedup target.
@@ -641,7 +641,7 @@ readable; we'd rather merge a thoughtful 50-line PR than a
 and `tests/` for how we oracle-test every kernel.
 
 If you're thinking about a new DST algorithm, start with
-`sparsecore/router.py` — `SET` and `RigL` are both ~50 lines of
+`sparselab/router.py` — `SET` and `RigL` are both ~50 lines of
 real logic, good templates for a new subclass.
 
 If you're thinking about kernel optimization (NEON / AVX / GPU),

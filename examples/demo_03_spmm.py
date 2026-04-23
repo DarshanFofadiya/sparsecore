@@ -46,8 +46,8 @@ import warnings
 import numpy as np
 import torch
 
-import sparsecore
-from sparsecore import PaddedCSR
+import sparselab
+from sparselab import PaddedCSR
 
 
 # Quiet PyTorch's beta-state sparse CSR warning — we know.
@@ -120,12 +120,12 @@ def benchmark(sparsity: float) -> dict:
     X = torch.randn(K, N, dtype=torch.float32)
 
     # ─── Correctness: our result vs torch.matmul ─────────────────────
-    Y_ours = sparsecore.spmm(W_csr, X)          # NEON path (default)
+    Y_ours = sparselab.spmm(W_csr, X)          # NEON path (default)
     Y_oracle = W_dense @ X
     max_diff = (Y_ours - Y_oracle).abs().max().item()
 
     # ─── Timings ─────────────────────────────────────────────────────
-    ms_ours = time_it(lambda: sparsecore.spmm(W_csr, X))
+    ms_ours = time_it(lambda: sparselab.spmm(W_csr, X))
     ms_torch = time_it(lambda: W_dense @ X)
 
     return {
@@ -146,7 +146,7 @@ def benchmark(sparsity: float) -> dict:
 def print_header():
     print()
     print("═" * 78)
-    print(f"SparseCore demo 3 — SpMM benchmark on Apple Silicon (NEON)")
+    print(f"SparseLab demo 3 — SpMM benchmark on Apple Silicon (NEON)")
     print(f"Shape: ({M}, {K}) @ ({K}, {N}) → ({M}, {N})   "
           f"Runs per cell: {NUM_RUNS}")
     print("═" * 78)
@@ -203,7 +203,7 @@ def print_summary(results):
     print("What to try next:")
     print("  - Bump N up to 2048 (longer seq_len) — NEON utilization rises")
     print("  - Try M=4096 (wider FFN) — more rows of work per call")
-    print("  - Force the scalar kernel: sparsecore.spmm(W, X, kernel='scalar')")
+    print("  - Force the scalar kernel: sparselab.spmm(W, X, kernel='scalar')")
     print("    and re-run, to see how much NEON actually helps us.")
     print()
 

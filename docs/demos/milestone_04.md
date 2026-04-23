@@ -2,7 +2,7 @@
 
 ## What ships
 
-- **`torch.autograd.Function` integration** — `sparsecore.spmm(W, X)`
+- **`torch.autograd.Function` integration** — `sparselab.spmm(W, X)`
   now participates in `loss.backward()` without any user ceremony
 - **`spmm_grad_w` kernel** — dL/dW at live slots only, O(nnz × N) FMAs,
   aligned to `W.values` for direct in-place optimizer updates
@@ -20,7 +20,7 @@ python examples/demo_04_autograd.py
 ```
 
 This demo is the first one where loss numbers actually decrease. Before
-4a, everything was forward-pass only. This is SparseCore crossing from
+4a, everything was forward-pass only. This is SparseLab crossing from
 "compute engine" to "training framework."
 
 Expected output shape:
@@ -51,7 +51,7 @@ the analytical gradient matches numerics. If you see the sparse loss
 drop at all, the whole autograd path works.
 
 **The DST invariant.** `max |padding_value| = 0.00e+00` is the
-assertion that defines what SparseCore is. The optimizer never touched
+assertion that defines what SparseLab is. The optimizer never touched
 a single padding slot, because their gradient was always exactly zero.
 This is the whole thesis of the project compressed into one line of
 output. Dense-simulated libraries cannot make this claim.
@@ -102,7 +102,7 @@ What this means for positioning:
     (milestones 4c-e) is the real product. "Speed" is a
     "fast enough to be usable" claim, not "faster than dense."
 
-The version of SparseCore that can make a legitimate "faster than
+The version of SparseLab that can make a legitimate "faster than
 dense" claim for forward + backward is the one that runs on non-Apple
 hardware. That's an important test to add soon.
 
@@ -141,7 +141,7 @@ W_values_t = torch.from_numpy(np.asarray(W_csr.values)).requires_grad_(True)
 Y = _SpMMFunction.apply(W_values_t, W_csr, X, "simd")
 
 # After (milestone 4b):
-layer = sparsecore.SparseLinear(K, M, sparsity=0.9)
+layer = sparselab.SparseLinear(K, M, sparsity=0.9)
 Y = layer(X)
 ```
 

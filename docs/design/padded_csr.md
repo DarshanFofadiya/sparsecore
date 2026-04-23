@@ -1,7 +1,7 @@
 # Design: Padded-CSR Storage Format
 
 **Status:** Draft — design for Milestone 3
-**Owner:** SparseCore project
+**Owner:** SparseLab project
 **Audience:** Contributors, reviewers, future maintainers
 
 ---
@@ -212,7 +212,7 @@ Given: crow_indices (len=nrows+1), col_indices (len=nnz), values (len=nnz)
    tight_nnz_i slots of the i-th padded row. Set row_nnz[i] = tight_nnz_i.
 ```
 
-This is an O(nnz + nrows) operation, done in Python using NumPy indexing — no C++ kernel needed. Lives in `sparsecore/layout.py`.
+This is an O(nnz + nrows) operation, done in Python using NumPy indexing — no C++ kernel needed. Lives in `sparselab/layout.py`.
 
 ### 5.3 Construction from dense `torch.Tensor`
 

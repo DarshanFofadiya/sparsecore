@@ -35,8 +35,8 @@ import time
 import numpy as np
 import torch
 
-import sparsecore
-from sparsecore import PaddedCSR
+import sparselab
+from sparselab import PaddedCSR
 
 
 REPEATS = 10  # how many times to run each kernel for timing stability
@@ -56,11 +56,11 @@ def bench(fn, *args, repeats: int = REPEATS) -> float:
 
 def bench_forward(W: PaddedCSR, X_np: np.ndarray) -> float:
     X_t = torch.from_numpy(X_np)
-    return bench(lambda: sparsecore.spmm(W, X_t))
+    return bench(lambda: sparselab.spmm(W, X_t))
 
 
 def bench_backward(W: PaddedCSR, dY: np.ndarray, X: np.ndarray) -> float:
-    from sparsecore import _core
+    from sparselab import _core
     return bench(lambda: _core.spmm_grad_w(W, dY, X))
 
 
@@ -88,7 +88,7 @@ def run_config(name: str, M: int, K: int, N: int, sparsity: float):
 
 def main():
     nth = os.environ.get("OMP_NUM_THREADS", "default")
-    print(f"\nSparseCore demo 9 — OpenMP parallel speedup")
+    print(f"\nSparseLab demo 9 — OpenMP parallel speedup")
     print(f"OMP_NUM_THREADS = {nth}   (set to 1 to disable parallelism)")
     print("=" * 98)
 

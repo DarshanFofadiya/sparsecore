@@ -1,5 +1,5 @@
 """
-Tests for sparsecore.SET and DynamicSparsityAlgorithm (milestone 4e).
+Tests for sparselab.SET and DynamicSparsityAlgorithm (milestone 4e).
 
 SET (Sparse Evolutionary Training) is the first dynamic-sparsity
 algorithm we ship. These tests cover:
@@ -15,8 +15,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-import sparsecore
-from sparsecore import (
+import sparselab
+from sparselab import (
     DynamicSparsityAlgorithm,
     SparseLinear,
     SET,

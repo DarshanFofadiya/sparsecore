@@ -1,8 +1,8 @@
 """
-sparsecore.nn — PyTorch-native ``nn.Module`` layers backed by sparse storage.
+sparselab.nn — PyTorch-native ``nn.Module`` layers backed by sparse storage.
 
 This is where the "two-line adoption" promise is delivered: a researcher
-swaps ``nn.Linear`` for ``sparsecore.SparseLinear`` and adds a
+swaps ``nn.Linear`` for ``sparselab.SparseLinear`` and adds a
 ``sparsity=0.9`` keyword, and the rest of their training script
 (optimizers, schedulers, loss functions, ``.to(device)``, ``state_dict``)
 keeps working. Under the hood the weight matrix lives as a ``PaddedCSR``,
@@ -25,9 +25,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from sparsecore._core import PaddedCSR as _PaddedCSR
-from sparsecore import layout as _layout
-from sparsecore.ops import _SpMMFunction
+from sparselab._core import PaddedCSR as _PaddedCSR
+from sparselab import layout as _layout
+from sparselab.ops import _SpMMFunction
 
 
 __all__ = ["SparseLinear"]
@@ -56,8 +56,8 @@ class SparseLinear(nn.Module):
         - Output: ``(*, out_features)``.
 
     Example:
-        >>> import torch, sparsecore
-        >>> layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+        >>> import torch, sparselab
+        >>> layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
         >>> x = torch.randn(128, 784)
         >>> y = layer(x)
         >>> y.shape

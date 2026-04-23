@@ -4,7 +4,7 @@
 
 The Router is our pluggable sparsity algorithm API. It is the contract
 that lets a community researcher express SET, RigL, or a brand-new
-DST algorithm as a short Python class without touching SparseCore's
+DST algorithm as a short Python class without touching SparseLab's
 kernels, storage, or autograd internals.
 
 **By the end of this milestone, an empty `SparsityAlgorithm` subclass
@@ -19,7 +19,7 @@ metaphor matches how mixture-of-experts "routers" work — an auxiliary
 policy head that dynamically reshapes the compute graph.
 
 Public class name is **`SparsityAlgorithm`** (matches Cerebras), but
-the module is `sparsecore.router` to match our narrative.
+the module is `sparselab.router` to match our narrative.
 
 ## Prior art — Cerebras `cstorch.sparse.SparsityAlgorithm`
 
@@ -49,16 +49,16 @@ Key patterns we diverge on:
 Before 4d (today):
 
 ```python
-fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)  # mask frozen at init
+fc1 = sparselab.SparseLinear(784, 512, sparsity=0.9)  # mask frozen at init
 # ... training loop, no topology mutation ...
 ```
 
 After 4d:
 
 ```python
-fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+fc1 = sparselab.SparseLinear(784, 512, sparsity=0.9)
 
-sparsity = sparsecore.sparse.Static(sparsity=0.9)   # no-op: mask stays frozen
+sparsity = sparselab.sparse.Static(sparsity=0.9)   # no-op: mask stays frozen
 fc1.apply(sparsity)                                  # attaches algorithm
 
 # Training loop unchanged. At the end of every opt.step():
@@ -68,9 +68,9 @@ fc1.apply(sparsity)                                  # attaches algorithm
 After 4e/4f (the payoff):
 
 ```python
-fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+fc1 = sparselab.SparseLinear(784, 512, sparsity=0.9)
 
-sparsity = sparsecore.sparse.RigL(
+sparsity = sparselab.sparse.RigL(
     sparsity=0.9,
     drop_fraction=0.3,     # 30% of live connections churn per update
     update_freq=100,        # every 100 steps
@@ -227,21 +227,21 @@ introduced alongside RigL itself in 4f (not needed for 4d/4e).
 ## Naming one-off discussion
 
 Cerebras calls their module `cstorch.sparse`. We're going to call
-ours `sparsecore.router` (module) but expose the classes under
-`sparsecore.sparse` too for Cerebras-familiar users. So all of
+ours `sparselab.router` (module) but expose the classes under
+`sparselab.sparse` too for Cerebras-familiar users. So all of
 these work:
 
 ```python
-import sparsecore
-sparsecore.Static(sparsity=0.9)         # top-level alias (most discoverable)
-sparsecore.sparse.Static(sparsity=0.9)  # Cerebras-compatible path
-sparsecore.router.Static(sparsity=0.9)  # our canonical module location
+import sparselab
+sparselab.Static(sparsity=0.9)         # top-level alias (most discoverable)
+sparselab.sparse.Static(sparsity=0.9)  # Cerebras-compatible path
+sparselab.router.Static(sparsity=0.9)  # our canonical module location
 ```
 
-We pick `sparsecore.router` for the file because *router* is a more
+We pick `sparselab.router` for the file because *router* is a more
 evocative name for "the thing that decides connection topology" than
-*sparse*, and we already have `sparsecore/nn.py` and `sparsecore/ops.py`
-so adding `sparsecore/router.py` keeps the source tree narratively
+*sparse*, and we already have `sparselab/nn.py` and `sparselab/ops.py`
+so adding `sparselab/router.py` keeps the source tree narratively
 coherent. The aliases are free.
 
 ## What's next after 4d

@@ -1,4 +1,4 @@
-# Build SparseCore wheels for macOS + Linux across Python 3.11/3.12/3.13.
+# Build SparseLab wheels for macOS + Linux across Python 3.11/3.12/3.13.
 #
 # Triggered on:
 #   - Any push to main         → build only, do not publish
@@ -20,13 +20,13 @@
 #
 # NOT shipped — Intel Mac (macOS x86_64):
 #   We tried in v0.1.1 with the macos-15-intel runner. The wheel builds
-#   cleanly, but the smoke test fails because sparsecore depends on
+#   cleanly, but the smoke test fails because sparselab depends on
 #   torch>=2.8 and upstream PyTorch stopped publishing macOS x86_64
 #   wheels after torch 2.2.2 (January 2024 deprecation; see
 #   https://dev-discuss.pytorch.org/t/pytorch-macos-x86-builds-deprecation-starting-january-2024/1690).
-#   Without a torch wheel on PyPI for that platform, any sparsecore
+#   Without a torch wheel on PyPI for that platform, any sparselab
 #   wheel we ship would be unusable — users couldn't install the
-#   dependency. Intel Mac users can still build sparsecore from sdist
+#   dependency. Intel Mac users can still build sparselab from sdist
 #   with torch pinned at <=2.2.2, but we'd be shipping against an
 #   end-of-life torch. Not a trade we want to make for v0.1.
 #
@@ -65,7 +65,7 @@ jobs:
             python: "3.13"
           # Intel Mac (macOS x86_64) wheels are NOT built.
           # Upstream PyTorch stopped publishing macOS x86_64 wheels
-          # after torch 2.2.2 (Jan 2024). Since sparsecore depends on
+          # after torch 2.2.2 (Jan 2024). Since sparselab depends on
           # torch>=2.8, an Intel Mac wheel would have no installable
           # dependency. See the workflow header for the full story.
           # Linux x86_64 — manylinux_2_28 via cibuildwheel default image.
@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: pypi
-      url: https://pypi.org/p/sparsecore
+      url: https://pypi.org/p/sparselab
     permissions:
       id-token: write  # required for trusted publishing
     steps:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────
-# test_fresh_install.sh — verify sparsecore installs + works on a
+# test_fresh_install.sh — verify sparselab installs + works on a
 # genuinely clean machine via Docker.
 #
 # This is the primary gate we hold ourselves to before tagging v0.1:
@@ -8,13 +8,13 @@
 #
 # What it does:
 #   1. Pulls a clean python:3.11-slim image (no torch, no compilers).
-#   2. Installs sparsecore from the wheel we built locally (or from
+#   2. Installs sparselab from the wheel we built locally (or from
 #      TestPyPI once we've pushed there).
 #   3. Runs the smoke test inside the container.
 #
 # Usage:
 #   # Test a locally-built wheel
-#   ./scripts/test_fresh_install.sh wheelhouse/sparsecore-0.1.0-*.whl
+#   ./scripts/test_fresh_install.sh wheelhouse/sparselab-0.1.0-*.whl
 #
 #   # Test from TestPyPI
 #   ./scripts/test_fresh_install.sh --testpypi
@@ -90,11 +90,11 @@ case "$SOURCE" in
         MOUNT_ARGS=(-v "$(cd "$(dirname "$WHEEL_FILE")" && pwd):/wheels:ro")
         ;;
     testpypi)
-        PIP_CMD="pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ sparsecore"
+        PIP_CMD="pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ sparselab"
         MOUNT_ARGS=()
         ;;
     pypi)
-        PIP_CMD="pip install sparsecore"
+        PIP_CMD="pip install sparselab"
         MOUNT_ARGS=()
         ;;
 esac
@@ -121,11 +121,11 @@ docker run --rm --platform "$PLATFORM" "${MOUNT_ARGS[@]}" \
         echo '── Container Python version ──'
         python --version
         echo
-        echo '── Installing sparsecore ──'
+        echo '── Installing sparselab ──'
         $PIP_CMD
         echo
         echo '── Installed versions ──'
-        python -c 'import sparsecore, torch; print(f\"sparsecore {sparsecore.__version__}\"); print(f\"torch {torch.__version__}\")'
+        python -c 'import sparselab, torch; print(f\"sparselab {sparselab.__version__}\"); print(f\"torch {torch.__version__}\")'
         echo
         echo '── Running smoke test ──'
         python /smoke_test.py

@@ -16,9 +16,9 @@ import numpy as np
 import pytest
 import torch
 
-import sparsecore
-from sparsecore import SparseLinear, SET
-from sparsecore.ops import (
+import sparselab
+from sparselab import SparseLinear, SET
+from sparselab.ops import (
     _cached_transpose,
     _clear_transpose_cache,
     _transpose_cache,
@@ -40,7 +40,7 @@ def clean_cache():
 def test_cache_hit_returns_same_object():
     """Second call with the same W (no topology change) should hit
     the cache and return the same WT object."""
-    W = sparsecore.PaddedCSR.random(8, 16, sparsity=0.5, seed=0)
+    W = sparselab.PaddedCSR.random(8, 16, sparsity=0.5, seed=0)
 
     WT1 = _cached_transpose(W)
     WT2 = _cached_transpose(W)
@@ -53,7 +53,7 @@ def test_cache_hit_returns_same_object():
 def test_cache_miss_after_topology_change():
     """After rewrite_row bumps topology_version, the next call must
     rebuild (returns a DIFFERENT WT)."""
-    W = sparsecore.PaddedCSR.random(8, 16, sparsity=0.5, seed=0)
+    W = sparselab.PaddedCSR.random(8, 16, sparsity=0.5, seed=0)
 
     WT1 = _cached_transpose(W)
     initial_version = W.topology_version
@@ -70,7 +70,7 @@ def test_cache_miss_after_topology_change():
 def test_cache_value_refresh_on_hit():
     """When W.values changes but topology doesn't (normal SGD step),
     the cached WT must show the updated values — not stale ones."""
-    W = sparsecore.PaddedCSR.random(8, 16, sparsity=0.5, seed=0)
+    W = sparselab.PaddedCSR.random(8, 16, sparsity=0.5, seed=0)
 
     # Prime the cache
     WT_before = _cached_transpose(W)
@@ -95,7 +95,7 @@ def test_cache_value_refresh_on_hit():
 def test_cache_correctness_against_fresh_transpose():
     """_cached_transpose must match a fresh W.transpose() in content
     (values and topology) at every call — cache hit or miss."""
-    W = sparsecore.PaddedCSR.random(16, 8, sparsity=0.5, seed=0)
+    W = sparselab.PaddedCSR.random(16, 8, sparsity=0.5, seed=0)
 
     # Miss path
     WT_cached = _cached_transpose(W)

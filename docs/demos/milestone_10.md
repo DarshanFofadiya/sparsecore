@@ -98,7 +98,7 @@ FFN-only and ~4.6× for all-sparse. This is structural for v0.1:
 3. **Attention layers are a bad fit for our kernel.** At 70%
    sparsity on relatively small matrices (384×384 for the output
    projection), the per-layer overhead eats most of the FLOP
-   savings. The sweet spot for SparseCore is large matrices at high
+   savings. The sweet spot for SparseLab is large matrices at high
    sparsity — e.g., our 384×1536 FFN at 90% sparsity, where the
    kernel amortizes its overhead cleanly.
 
@@ -235,8 +235,8 @@ close that gap.
 Reproduce on your own machine:
 
 ```bash
-git clone https://github.com/DarshanFofadiya/sparsecore.git
-cd sparsecore
+git clone https://github.com/DarshanFofadiya/sparselab.git
+cd sparselab
 pip install -e '.[demos]'
 python examples/demo_15_mini_gpt.py --steps 10000 --path all-three
 ```

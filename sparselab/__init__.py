@@ -1,5 +1,5 @@
 """
-SparseCore — dynamic sparse training for PyTorch, CPU-native, Apple Silicon first.
+SparseLab — dynamic sparse training for PyTorch, CPU-native, Apple Silicon first.
 
 Public API (v0.1):
     PaddedCSR          — sparse matrix storage with padded rows for O(1) insert.
@@ -16,7 +16,7 @@ Factory helpers on PaddedCSR:
     PaddedCSR.random(nrows, ncols, *, sparsity, padding_ratio=0.2, seed=None)
     PaddedCSR.to_dense() -> torch.Tensor
 
-This __init__ attaches the factory helpers (defined in sparsecore.layout) as
+This __init__ attaches the factory helpers (defined in sparselab.layout) as
 classmethod-style staticmethods on the C++-backed PaddedCSR class. The result
 is that users see a single coherent PaddedCSR class, even though its methods
 span two implementation languages.
@@ -28,15 +28,15 @@ See docs/PROJECT_OVERVIEW.md for the full mission and roadmap.
 # process. Our C++ extension was linked against torch/lib/libomp.dylib
 # via rpath at build time; that rpath only resolves if torch is already
 # in the process, OR if libomp happens to be on the system at a known
-# path. Since SparseCore is a PyTorch extension anyway (every public
+# path. Since SparseLab is a PyTorch extension anyway (every public
 # API returns torch.Tensor), this is a free pre-condition to establish.
 import torch as _torch  # noqa: F401  (imported for side effect)
 
-from sparsecore._core import PaddedCSR as _PaddedCSRCpp
-from sparsecore import layout as _layout
-from sparsecore.ops import spmm
-from sparsecore.nn import SparseLinear
-from sparsecore.router import (
+from sparselab._core import PaddedCSR as _PaddedCSRCpp
+from sparselab import layout as _layout
+from sparselab.ops import spmm
+from sparselab.nn import SparseLinear
+from sparselab.router import (
     SparsityAlgorithm,
     Static,
     DynamicSparsityAlgorithm,
@@ -74,4 +74,4 @@ __all__ = [
     "SET",
     "RigL",
 ]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -1,5 +1,5 @@
 """
-sparsecore.layout — Python factories for PaddedCSR.
+sparselab.layout — Python factories for PaddedCSR.
 
 The C++ side (csrc/kernels/padded_csr.{hpp,cpp}) defines the data layout
 and invariant checking. This module provides user-friendly constructors
@@ -22,10 +22,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import torch
 
-from sparsecore import _core
+from sparselab import _core
 
 if TYPE_CHECKING:
-    from sparsecore._core import PaddedCSR as _PaddedCSR
+    from sparselab._core import PaddedCSR as _PaddedCSR
 
 
 __all__ = [
@@ -446,7 +446,7 @@ def transpose(p: "_PaddedCSR", *, padding_ratio: float = 0.2) -> "_PaddedCSR":
 #
 #      WT.values[:] = W.values[perm]   # with perm[pad]=-1 writing 0
 #
-#  See sparsecore.ops._cached_transpose for the consumer.
+#  See sparselab.ops._cached_transpose for the consumer.
 #
 #  This is a v0.1 optimization — the core transpose function above stays
 #  untouched. If the cache proves broken we just stop calling this one

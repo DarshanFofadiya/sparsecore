@@ -3,7 +3,7 @@ Integration tests: SET and RigL training through the transpose cache.
 
 Why this file exists
 ────────────────────
-The transpose cache in `sparsecore.ops._cached_transpose` keys on
+The transpose cache in `sparselab.ops._cached_transpose` keys on
 `W.topology_version`. Every SET/RigL update calls `csr.rewrite_row`,
 which bumps the version, which should invalidate the cache. This is
 tested at the unit level in `test_transpose_cache.py`.
@@ -36,8 +36,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-import sparsecore
-from sparsecore.ops import _clear_transpose_cache
+import sparselab
+from sparselab.ops import _clear_transpose_cache
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ def _run_training(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    layer = sparsecore.SparseLinear(
+    layer = sparselab.SparseLinear(
         in_features, out_features, sparsity=sparsity, bias=False
     )
     opt = torch.optim.SGD(layer.parameters(), lr=0.05)
@@ -115,7 +115,7 @@ def test_set_loss_trajectory_matches_fresh_transpose():
     (first SET update) and growing.
     """
     def make_algo():
-        return sparsecore.SET(
+        return sparselab.SET(
             sparsity=0.8,
             drop_fraction=0.3,
             update_freq=25,
@@ -167,7 +167,7 @@ def test_set_many_updates_cache_stays_correct():
     wrong and loss diverges within 2-3 steps.
     """
     def make_algo():
-        return sparsecore.SET(
+        return sparselab.SET(
             sparsity=0.7, drop_fraction=0.4, update_freq=5, seed=7
         )
 
@@ -202,7 +202,7 @@ def test_rigl_loss_trajectory_matches_fresh_transpose():
     it's worth testing independently.
     """
     def make_algo():
-        return sparsecore.RigL(
+        return sparselab.RigL(
             sparsity=0.8,
             drop_fraction=0.3,
             update_freq=25,

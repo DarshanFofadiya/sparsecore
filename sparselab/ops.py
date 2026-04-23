@@ -1,5 +1,5 @@
 """
-sparsecore.ops — sparse tensor operations.
+sparselab.ops — sparse tensor operations.
 
 This module holds the public-facing operation functions (spmm, and in
 later milestones: spmm backward, elementwise ops, etc.). It is the
@@ -7,8 +7,8 @@ PyTorch-facing shim layer — accepts torch.Tensor inputs, dispatches to
 the C++ kernels, returns torch.Tensor outputs.
 
 Separation of concerns:
-    sparsecore.layout  — how sparse data is stored and constructed
-    sparsecore.ops     — what you can do with sparse data (forward pass ops)
+    sparselab.layout  — how sparse data is stored and constructed
+    sparselab.ops     — what you can do with sparse data (forward pass ops)
 
 Public API:
     spmm(W, X) -> torch.Tensor       # sparse-dense matmul Y = W @ X
@@ -22,8 +22,8 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from sparsecore import _core
-from sparsecore._core import PaddedCSR as _PaddedCSR
+from sparselab import _core
+from sparselab._core import PaddedCSR as _PaddedCSR
 
 
 __all__ = ["spmm"]
@@ -73,7 +73,7 @@ def _cached_transpose(W: _PaddedCSR) -> _PaddedCSR:
     On cache hit: refreshes WT.values from W.values (cheap scatter).
     On cache miss: rebuilds WT + perm (expensive), stores, returns.
     """
-    from sparsecore.layout import transpose_with_perm  # local import to avoid cycle
+    from sparselab.layout import transpose_with_perm  # local import to avoid cycle
 
     key = id(W)
     cur_version = W.topology_version
@@ -262,7 +262,7 @@ def spmm(
     # ─── Type checks ──────────────────────────────────────────────────
     if not isinstance(W, _PaddedCSR):
         raise TypeError(
-            f"spmm: W must be a sparsecore.PaddedCSR, got {type(W).__name__}"
+            f"spmm: W must be a sparselab.PaddedCSR, got {type(W).__name__}"
         )
     if not isinstance(X, torch.Tensor):
         raise TypeError(
@@ -273,7 +273,7 @@ def spmm(
     if X.device.type != "cpu":
         raise RuntimeError(
             f"spmm: X must be on CPU (got device={X.device}). "
-            f"SparseCore v0.1 is CPU-only; GPU support arrives post-v0.1."
+            f"SparseLab v0.1 is CPU-only; GPU support arrives post-v0.1."
         )
 
     # ─── Shape check ──────────────────────────────────────────────────

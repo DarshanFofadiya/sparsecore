@@ -5,7 +5,7 @@
 The launch artifact. A tiny decoder-only transformer, trained on Tiny
 Shakespeare, that actually converges and generates coherent text —
 on a MacBook, in under 10 minutes, with sparse FFN weights via
-SparseCore.
+SparseLab.
 
 This is the launch demo: the "show, don't tell" proof that
 sparse-from-scratch training is practical on CPU.
@@ -23,7 +23,7 @@ sparse-from-scratch training is practical on CPU.
 
 ## The research claim we can make honestly
 
-> "A 90%-sparse tiny transformer trained from scratch with SparseCore
+> "A 90%-sparse tiny transformer trained from scratch with SparseLab
 > on an M3 Pro MacBook reaches comparable validation loss to its
 > dense equivalent, in comparable wall-clock time, while using
 > <20% of the dense memory footprint."

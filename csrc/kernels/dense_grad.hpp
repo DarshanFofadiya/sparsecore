@@ -18,7 +18,7 @@
 #include <cstdint>
 
 
-namespace sparsecore {
+namespace sparselab {
 
 // ─────────────────────────────────────────────────────────────────────────
 //  dense_grad: compute the FULL dense gradient of the loss w.r.t. W.
@@ -46,4 +46,4 @@ void dense_grad(
     float* G            // (M, K) — output
 );
 
-}  // namespace sparsecore
+}  // namespace sparselab

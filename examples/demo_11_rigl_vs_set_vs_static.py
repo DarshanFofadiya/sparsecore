@@ -17,7 +17,7 @@ How to run
 ──────────
     python examples/demo_11_rigl_vs_set_vs_static.py
 
-Needs: pip install sparsecore[demos]
+Needs: pip install sparselab[demos]
 
 Runtime: ~6-10 minutes on M3 Pro.
 
@@ -48,14 +48,14 @@ try:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
 try:
     from torchvision import datasets, transforms
 except ImportError:
-    raise SystemExit("pip install sparsecore[demos]")
+    raise SystemExit("pip install sparselab[demos]")
 
-import sparsecore
+import sparselab
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -88,7 +88,7 @@ def load_mnist():
 
 def build_model():
     torch.manual_seed(0)
-    fc1 = sparsecore.SparseLinear(784, HIDDEN, sparsity=SPARSITY, bias=False)
+    fc1 = sparselab.SparseLinear(784, HIDDEN, sparsity=SPARSITY, bias=False)
     fc2 = nn.Linear(HIDDEN, 10, bias=False)
     return fc1, fc2
 
@@ -169,7 +169,7 @@ def plot_comparison(results, out_path):
 
 
 def main():
-    print(f"\nSparseCore demo 11 — Static vs SET vs RigL at {SPARSITY*100:.0f}% sparsity")
+    print(f"\nSparseLab demo 11 — Static vs SET vs RigL at {SPARSITY*100:.0f}% sparsity")
     print(f"HIDDEN={HIDDEN}  EPOCHS={EPOCHS}  BATCH={BATCH_SIZE}  LR={LR}")
     print(f"DST: drop_fraction={DROP_FRACTION}, update_freq={UPDATE_FREQ}")
     print("=" * 80)
@@ -178,14 +178,14 @@ def main():
     train_loader, test_loader = load_mnist()
 
     algos = [
-        ("Static", sparsecore.Static(sparsity=SPARSITY)),
-        ("SET", sparsecore.SET(
+        ("Static", sparselab.Static(sparsity=SPARSITY)),
+        ("SET", sparselab.SET(
             sparsity=SPARSITY,
             drop_fraction=DROP_FRACTION,
             update_freq=UPDATE_FREQ,
             seed=42,
         )),
-        ("RigL", sparsecore.RigL(
+        ("RigL", sparselab.RigL(
             sparsity=SPARSITY,
             drop_fraction=DROP_FRACTION,
             update_freq=UPDATE_FREQ,

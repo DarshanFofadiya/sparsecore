@@ -1,5 +1,5 @@
 """
-sparsecore.router — the pluggable sparsity algorithm API.
+sparselab.router — the pluggable sparsity algorithm API.
 
 This module defines the contract that every DST (Dynamic Sparse
 Training) algorithm — RigL, SET, a new one you're inventing — must
@@ -18,10 +18,10 @@ topology."
 
 User story (intended workflow):
 
-    layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+    layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
 
     # 4d: Static — no-op reference implementation
-    sparsity = sparsecore.Static(sparsity=0.9)
+    sparsity = sparselab.Static(sparsity=0.9)
     layer.apply(sparsity)                     # or model.apply(sparsity)
 
     # Training loop (unchanged except for the final line):
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     # Only imported for type hints to avoid a circular import at runtime
     # (nn.py → router.py → nn.py). The string quotes on forward refs
     # below handle the actual typing.
-    from sparsecore.nn import SparseLinear
+    from sparselab.nn import SparseLinear
 
 
 __all__ = [
@@ -105,7 +105,7 @@ class SparsityAlgorithm:
         path below.
         """
         # Late import to avoid circular import at module load time.
-        from sparsecore.nn import SparseLinear
+        from sparselab.nn import SparseLinear
 
         if not isinstance(layer, SparseLinear):
             raise TypeError(
@@ -129,7 +129,7 @@ class SparsityAlgorithm:
         want, since a single algorithm instance can govern every
         SparseLinear in a multi-layer network.
         """
-        from sparsecore.nn import SparseLinear
+        from sparselab.nn import SparseLinear
 
         if isinstance(module, SparseLinear):
             self.attach(module)
@@ -202,9 +202,9 @@ class Static(SparsityAlgorithm):
         sparsity: same as :class:`SparsityAlgorithm`.
 
     Example:
-        >>> import sparsecore
-        >>> layer = sparsecore.SparseLinear(128, 64, sparsity=0.9)
-        >>> algo = sparsecore.Static(sparsity=0.9)
+        >>> import sparselab
+        >>> layer = sparselab.SparseLinear(128, 64, sparsity=0.9)
+        >>> algo = sparselab.Static(sparsity=0.9)
         >>> layer.apply(algo)                    # attaches
         >>> algo.step()                          # no topology change
         >>> layer.nnz                            # unchanged from init
@@ -326,8 +326,8 @@ class SET(DynamicSparsityAlgorithm):
                        we default to 100 too.
 
     Example:
-        >>> layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
-        >>> algo = sparsecore.SET(sparsity=0.9, drop_fraction=0.3,
+        >>> layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
+        >>> algo = sparselab.SET(sparsity=0.9, drop_fraction=0.3,
         ...                        update_freq=100)
         >>> layer.apply(algo)
         >>> # training loop
@@ -525,8 +525,8 @@ class RigL(DynamicSparsityAlgorithm):
     `dY`. These are consumed and cleared at every `update()`.
 
     Example:
-        >>> layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
-        >>> algo = sparsecore.RigL(sparsity=0.9, drop_fraction=0.3,
+        >>> layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
+        >>> algo = sparselab.RigL(sparsity=0.9, drop_fraction=0.3,
         ...                          update_freq=100, seed=42)
         >>> layer.apply(algo)
         >>> # training loop
@@ -599,7 +599,7 @@ class RigL(DynamicSparsityAlgorithm):
         """Mutate one layer's topology using the captured gradient info."""
         import numpy as np
         import torch
-        from sparsecore import _core
+        from sparselab import _core
 
         # ── Retrieve captured X and dY from the hooks.
         captured = self._captured.get(id(layer))

@@ -5,8 +5,8 @@
 `SparseLinear` is a `torch.nn.Module` drop-in replacement for
 `torch.nn.Linear` whose weight matrix is stored as a PaddedCSR rather
 than a dense tensor. This is the "two-line adoption" promise of
-SparseCore: a researcher should be able to take a dense MLP and make
-it sparse by renaming `nn.Linear` to `sparsecore.SparseLinear` and
+SparseLab: a researcher should be able to take a dense MLP and make
+it sparse by renaming `nn.Linear` to `sparselab.SparseLinear` and
 adding a `sparsity=0.9` keyword argument.
 
 That's it. That's the whole milestone. It's pure plumbing on top of
@@ -31,7 +31,7 @@ fc2 = nn.Linear(HIDDEN, 10, bias=False)
 After Milestone 4b:
 
 ```python
-fc1 = sparsecore.SparseLinear(784, 512, sparsity=0.9, bias=False)
+fc1 = sparselab.SparseLinear(784, 512, sparsity=0.9, bias=False)
 fc2 = nn.Linear(512, 10, bias=False)
 # ... standard nn.Module training step ...
 ```

@@ -12,9 +12,9 @@ Our user-facing API matches SET exactly — swap `SET(...)` for
 `RigL(...)` and you're done:
 
 ```python
-layer = sparsecore.SparseLinear(784, 512, sparsity=0.9)
+layer = sparselab.SparseLinear(784, 512, sparsity=0.9)
 
-algo = sparsecore.RigL(
+algo = sparselab.RigL(
     sparsity=0.9,
     drop_fraction=0.3,
     update_freq=100,

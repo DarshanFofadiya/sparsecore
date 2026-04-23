@@ -11,7 +11,7 @@
 #include "vector_dot.hpp"
 
 
-namespace sparsecore {
+namespace sparselab {
 
 float vector_dot_scalar(const float* a, const float* b, std::size_t n) {
     // Accumulator is float32 (not double) — see the rationale in
@@ -29,4 +29,4 @@ float vector_dot_scalar(const float* a, const float* b, std::size_t n) {
     // behavior on empty tensors. No special-case code needed.
 }
 
-}  // namespace sparsecore
+}  // namespace sparselab
