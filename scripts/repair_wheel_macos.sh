@@ -1,33 +1,31 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────
-# repair_wheel_macos.sh — delocate-wheel replacement for SparseCore macOS
+# repair_wheel_macos.sh — minimal wheel repair for SparseCore macOS
 #
 # Called by cibuildwheel's repair-wheel-command on macOS runners.
 #
-# Why this script instead of a one-liner delocate call:
+# Why this script instead of `delocate-wheel`:
+#   1. We don't want to bundle libomp.dylib into the wheel (see
+#      [tool.cibuildwheel.macos] in pyproject.toml for full rationale).
+#      In short: torch ships its own libomp, our wheel bundling a
+#      second copy would cause OpenMP's runtime to abort the process.
+#   2. delocate won't even analyze a wheel whose dependencies can't be
+#      resolved — so we can't just call `delocate-wheel --exclude
+#      libomp.dylib` because the build-time libomp path doesn't exist
+#      on the repair machine (it was torch's install path from a
+#      different environment). Observed locally as
+#         delocate.libsana.DelocationError:
+#           /opt/llvm-openmp/lib/libomp.dylib not found
+#   3. We only have one delocatable dep (libomp) and we know exactly
+#      what to do with it — rewrite its load path to @rpath/libomp.dylib
+#      and add a rpath entry pointing at torch's libomp on the user's
+#      machine. That's ~20 lines of otool + install_name_tool, simpler
+#      than working around delocate.
 #
-#  We deliberately do NOT bundle libomp.dylib into our wheel. See the
-#  [tool.cibuildwheel.macos] section in pyproject.toml for the full
-#  rationale. Short version: bundling would create a second libomp in
-#  the process alongside torch's libomp, and OpenMP's runtime aborts
-#  when it detects duplicates.
-#
-#  Instead, we rely on PyTorch's libomp (torch ships its own inside its
-#  wheel) which is always loaded first because sparsecore/__init__.py
-#  does `import torch` before loading our _core.so. For this to work
-#  at runtime on an arbitrary user's machine:
-#
-#   1. Our _core.so's libomp load path must be a name the dynamic
-#      loader will match against the already-loaded torch libomp —
-#      specifically, @rpath/libomp.dylib.
-#
-#   2. Our _core.so's rpath list must include a path relative to
-#      @loader_path that resolves to the user's torch/lib directory.
-#      sparsecore/_core.so lives at
-#        <site-packages>/sparsecore/_core.so
-#      and torch's libomp lives at
-#        <site-packages>/torch/lib/libomp.dylib
-#      So @loader_path/../torch/lib is the right rpath.
+# At runtime: sparsecore/__init__.py imports torch first, which loads
+# torch's libomp.dylib. When _core.so loads, its @rpath/libomp.dylib
+# reference resolves to the already-loaded torch libomp. One copy in
+# the process. No collision.
 #
 # Usage (invoked by cibuildwheel):
 #   repair_wheel_macos.sh <wheel> <dest_dir> <archs>
@@ -35,107 +33,111 @@
 
 set -euo pipefail
 
-WHEEL="$1"
-DEST_DIR="$2"
-ARCHS="$3"
+# Resolve to absolute paths BEFORE we cd anywhere, otherwise relative
+# paths passed by the caller (or by cibuildwheel) break once we move
+# into the temp workdir.
+WHEEL="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+DEST_DIR="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
+ARCHS="$3"  # currently unused; kept in signature for parity with delocate-wheel
 
 echo "── repair_wheel_macos.sh"
 echo "   wheel:    $WHEEL"
 echo "   dest_dir: $DEST_DIR"
 echo "   archs:    $ARCHS"
 
-# Step 1: run delocate with --exclude libomp.dylib. This means delocate
-# will sanity-check the wheel and copy any OTHER delocatable deps
-# (if we ever add another lib dependency), but leave libomp alone.
-# It also preserves the original (non-rewritten) install name for
-# libomp in our _core.so.
-echo "── Step 1: delocate-wheel with --exclude libomp.dylib"
-delocate-wheel \
-    --exclude libomp.dylib \
-    --require-archs "$ARCHS" \
-    -w "$DEST_DIR" \
-    -v \
-    "$WHEEL"
+mkdir -p "$DEST_DIR"
+WHEEL_BASENAME="$(basename "$WHEEL")"
 
-# Find the repaired wheel in the dest dir (there may be more than one
-# iteration of the same name if we're debugging; take the latest).
-REPAIRED_WHEEL="$(ls -t "$DEST_DIR"/*.whl | head -n 1)"
-echo "── Step 2: repaired wheel is $REPAIRED_WHEEL"
-
-# Step 2: unpack, rewrite, repack. We need to change the libomp
-# install name in _core.so from an absolute path (the build-time
-# /opt/homebrew/opt/libomp/lib/libomp.dylib) to @rpath/libomp.dylib.
-# We also add the rpath entry that lets the dynamic loader find
-# torch's libomp at runtime.
+# Unpack wheel into a temp dir. Wheels are zip archives.
 WORKDIR="$(mktemp -d)"
-echo "── Step 3: unpack to $WORKDIR"
+echo "── Step 1: unpack $WHEEL_BASENAME to $WORKDIR"
 cd "$WORKDIR"
-unzip -q "$REPAIRED_WHEEL"
+unzip -q "$WHEEL"
 
-# Find the .so file. Only one per wheel, but glob in case naming changes.
+# Find the .so file. There should be exactly one per wheel, but glob in
+# case future builds produce more.
 SO_FILE=$(find sparsecore -name "_core*.so" | head -n 1)
 if [[ -z "$SO_FILE" ]]; then
     echo "ERROR: could not find sparsecore/_core*.so in the wheel"
     exit 1
 fi
-echo "── Step 4: rewriting install names in $SO_FILE"
+echo "── Step 2: rewriting install names in $SO_FILE"
 
-# Print current state for debugging.
+# Print current state for debugging CI failures.
 echo "   BEFORE:"
 otool -L "$SO_FILE" | sed 's/^/     /'
-otool -l "$SO_FILE" | grep -A2 LC_RPATH | sed 's/^/     /' || true
+otool -l "$SO_FILE" | awk '/cmd LC_RPATH/{getline; getline; print}' | sed 's/^/     rpath:/' || true
 
-# Find any load command referencing libomp and rewrite it. The original
-# path is whatever setup.py's linker step produced — typically
-# /opt/homebrew/opt/libomp/lib/libomp.dylib but could vary. We use
-# otool -L to discover it rather than hardcoding.
+# Step 2a: find any load command referencing libomp.
+# On the CI runner, the build-time path is
+#   /Users/runner/.../site-packages/torch/lib/libomp.dylib  (torch's)
+# or
+#   /opt/homebrew/opt/libomp/lib/libomp.dylib  (Homebrew's)
+# We don't hardcode either — instead we grep otool output and rewrite
+# whatever we find to the portable @rpath form.
 OLD_LIBOMP_PATH="$(otool -L "$SO_FILE" | grep -E 'libomp\.dylib' | awk '{print $1}' | head -n 1)"
 if [[ -n "$OLD_LIBOMP_PATH" && "$OLD_LIBOMP_PATH" != "@rpath/libomp.dylib" ]]; then
-    echo "   rewriting libomp install name from $OLD_LIBOMP_PATH"
+    echo "   rewriting libomp install name: $OLD_LIBOMP_PATH → @rpath/libomp.dylib"
     install_name_tool -change "$OLD_LIBOMP_PATH" "@rpath/libomp.dylib" "$SO_FILE"
 else
-    echo "   libomp install name already correct or absent"
+    echo "   libomp install name already @rpath form or absent"
 fi
 
-# Add rpath entries the loader can use to find libomp at runtime:
-#   @loader_path/../torch/lib  — the path to torch/lib/ from our .so,
-#                                when both are installed as siblings
-#                                under <site-packages>.
-# Deduplication: install_name_tool -add_rpath fails if the rpath is
-# already present, so we check first.
+# Step 2b: add the rpath that lets the dynamic loader find torch's
+# libomp at runtime.
+#   sparsecore/_core.so lives at <site-packages>/sparsecore/_core.so
+#   torch's libomp lives at <site-packages>/torch/lib/libomp.dylib
+#   So @loader_path/../torch/lib resolves correctly.
 add_rpath_if_missing() {
     local rpath="$1"
     if otool -l "$SO_FILE" | grep -q "path $rpath "; then
-        echo "   rpath $rpath already present"
+        echo "   rpath already present: $rpath"
     else
-        echo "   adding rpath $rpath"
+        echo "   adding rpath: $rpath"
         install_name_tool -add_rpath "$rpath" "$SO_FILE"
     fi
 }
 add_rpath_if_missing "@loader_path/../torch/lib"
 
-# Sanitize: remove any absolute rpaths that point at build-time paths
-# (e.g. /opt/homebrew/opt/libomp/lib or /Users/runner/...). These
-# won't exist on user machines and produce dyld warnings.
+# Step 2c: remove any absolute rpaths pointing at build-time paths
+# that won't exist on the user's machine. The loader silently ignores
+# missing rpaths, but cleaning them up keeps `otool -l` output
+# diagnostic-friendly for users who inspect our wheel.
 for rpath_candidate in \
     "/opt/homebrew/opt/libomp/lib" \
     "/usr/local/opt/libomp/lib" \
+    "/opt/llvm-openmp/lib" \
 ; do
     if otool -l "$SO_FILE" | grep -q "path $rpath_candidate "; then
-        echo "   removing build-time rpath $rpath_candidate"
+        echo "   removing build-time rpath: $rpath_candidate"
         install_name_tool -delete_rpath "$rpath_candidate" "$SO_FILE" || true
     fi
 done
 
+# Also remove any rpath that points into a specific torch install path
+# (those baked-in absolute /Users/runner/... or /private/var/folders/...
+# paths won't exist on user machines either). We match any rpath
+# containing "/torch/lib" that isn't the portable @loader_path form.
+while read -r absolute_torch_rpath; do
+    if [[ -n "$absolute_torch_rpath" && "$absolute_torch_rpath" != "@loader_path/../torch/lib" ]]; then
+        echo "   removing absolute torch rpath: $absolute_torch_rpath"
+        install_name_tool -delete_rpath "$absolute_torch_rpath" "$SO_FILE" || true
+    fi
+done < <(
+    otool -l "$SO_FILE" \
+        | awk '/cmd LC_RPATH/{getline; getline; sub(/^[ \t]*path /,""); sub(/ \(offset.*$/,""); print}' \
+        | grep "/torch/lib" || true
+)
+
 echo "   AFTER:"
 otool -L "$SO_FILE" | sed 's/^/     /'
-otool -l "$SO_FILE" | grep -A2 LC_RPATH | sed 's/^/     /' || true
+otool -l "$SO_FILE" | awk '/cmd LC_RPATH/{getline; getline; print}' | sed 's/^/     rpath:/' || true
 
-# Step 5: re-zip back into a wheel.
-WHEEL_NAME="$(basename "$REPAIRED_WHEEL")"
-echo "── Step 5: repacking into $DEST_DIR/$WHEEL_NAME"
-zip -r -q "$DEST_DIR/$WHEEL_NAME.tmp" .
-mv -f "$DEST_DIR/$WHEEL_NAME.tmp" "$DEST_DIR/$WHEEL_NAME"
+# Step 3: re-zip back into a wheel. The wheel format is just a zip
+# archive with a specific file layout (we preserve the layout here).
+echo "── Step 3: repacking into $DEST_DIR/$WHEEL_BASENAME"
+zip -r -q "$DEST_DIR/$WHEEL_BASENAME.tmp" .
+mv -f "$DEST_DIR/$WHEEL_BASENAME.tmp" "$DEST_DIR/$WHEEL_BASENAME"
 
 cd - > /dev/null
 rm -rf "$WORKDIR"

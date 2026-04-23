@@ -32,7 +32,7 @@ First public release. The pluggable DST foundation.
   dense-equivalence oracles at 1e-5 tolerance.
 - 15 example demos, end-to-end from "hello pybind" to "10M-param
   mini-GPT trained on Tiny Shakespeare at 90% FFN sparsity."
-- Pre-built PyPI wheels for macOS arm64, macOS x86_64, Linux x86_64,
+- Pre-built PyPI wheels for macOS arm64 (Apple Silicon), Linux x86_64,
   and Linux aarch64 across Python 3.11, 3.12, 3.13. libomp bundled
   inside the wheels — no `brew install libomp` needed for
   `pip install` users.
@@ -46,6 +46,9 @@ First public release. The pluggable DST foundation.
 - Single-machine. No distributed / DDP training.
 - Native Windows wheels not available (use WSL2 with the Linux wheel
   in the meantime). Planned v0.2.
+- Intel Mac wheels not available (GitHub retired their Intel CI
+  runner in December 2025 and the replacement isn't GA yet). Intel
+  Mac users build from source for v0.1; native wheels planned v0.2.
 - The `dW` kernel relies on Clang auto-vectorization, not hand-
   tuned NEON. A dedicated NEON `dW` kernel is the top v0.2 speedup
   target (~1.3–1.5× end-to-end at FFN scale).

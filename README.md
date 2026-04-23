@@ -134,13 +134,17 @@ libraries to install, no compiler required:
 | Platform | Arch | Python versions | Kernel |
 |-|-|-|-|
 | macOS | arm64 (Apple Silicon) | 3.11, 3.12, 3.13 | NEON + OpenMP |
-| macOS | x86_64 (Intel Mac) | 3.11, 3.12, 3.13 | scalar + OpenMP |
 | Linux | x86_64 (manylinux) | 3.11, 3.12, 3.13 | scalar + OpenMP |
 | Linux | aarch64 (manylinux) | 3.11, 3.12, 3.13 | NEON + OpenMP |
 
-**Windows:** not yet. Native Windows wheels are planned for v0.2. In
-the meantime, Windows users can use [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install)
-with our Linux wheel — that path works today.
+**Windows & Intel Mac:** not yet. Native Windows wheels are planned
+for v0.2. Intel Mac wheels are paused while we wait for GitHub's
+replacement Intel CI runner — we don't want to ship wheels we can
+only test under Rosetta emulation. In the meantime:
+- **Windows users:** use [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install)
+  with our Linux wheel — that path works today.
+- **Intel Mac users:** build from source (see "Development install"
+  below). It takes ~45 seconds on any modern Mac.
 
 If you're on a platform not in the table above, pip falls back to
 compiling from source. For that you'll need:
@@ -267,6 +271,8 @@ PyPI wheels for macOS and Linux.
 
 **v0.2 (next ~4–6 weeks).**
 - **Windows native wheels** — removes the WSL2 workaround.
+- **Intel Mac wheels** — once GitHub's replacement Intel CI runner
+  ships so we can build + test natively.
 - NEON `dW` kernel — the main outstanding speedup target
   (~1.3–1.5× end-to-end at FFN scale).
 - Buffer reuse / arena in the backward path.

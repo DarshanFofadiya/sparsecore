@@ -91,8 +91,14 @@ skip = [
 ]
 
 # After building each wheel, run this command inside the wheel's env
-# to verify it actually loads and works. {project} is the source dir.
-test-command = "python {project}/scripts/smoke_test.py"
+# to verify it actually loads and works.
+#
+# Note: cibuildwheel runs test-command from a temporary test directory
+# (not the project root), so a relative path like "scripts/smoke_test.py"
+# would fail. $GITHUB_WORKSPACE is set by the GitHub Actions runner to
+# the absolute path of the checked-out repo and is inherited into the
+# test environment, so we use it to locate the smoke test script.
+test-command = "python $GITHUB_WORKSPACE/scripts/smoke_test.py"
 # Install torch at test time (our dependency, but we want the wheel env
 # to install it fresh, not carry it over from build).
 # This mirrors what a real user's `pip install sparsecore` will do.
@@ -134,8 +140,18 @@ before-build = [
 #      loads torch's libomp. When _core.so loads, its @rpath/libomp.dylib
 #      lookup resolves to the already-loaded torch libomp. One copy in
 #      the process. No collision.
+# The leading 'bash' is needed because cibuildwheel runs repair in a
+# shell, but doesn't give the repair command execute permissions on
+# user files. Bash reads the script explicitly.
+#
+# Path: $GITHUB_WORKSPACE is set by GitHub Actions to the absolute path
+# of the checked-out repo. We use it instead of cibuildwheel's
+# {project} / {package} placeholders because those weren't being
+# substituted in repair-wheel-command on v2.21/v2.22 (observed as
+# 'No such file or directory: {package}/scripts/repair_wheel_macos.sh').
+# Using $GITHUB_WORKSPACE sidesteps the placeholder issue entirely.
 repair-wheel-command = [
-    "bash {package}/scripts/repair_wheel_macos.sh {wheel} {dest_dir} {delocate_archs}"
+    "bash $GITHUB_WORKSPACE/scripts/repair_wheel_macos.sh {wheel} {dest_dir} {delocate_archs}"
 ]
 
 # ─── Linux-specific configuration ─────────────────────────────────
