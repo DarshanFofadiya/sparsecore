@@ -1,6 +1,6 @@
 # SparseCore
 
-![v0.1](https://img.shields.io/badge/version-0.1.0-blue)
+![v0.1](https://img.shields.io/badge/version-0.1.1-blue)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![PyPI](https://img.shields.io/pypi/v/sparsecore)
 ![tests](https://img.shields.io/badge/tests-372%20passing-brightgreen)
@@ -421,6 +421,85 @@ pytest
 If something doesn't work, please [open an issue with the output](https://github.com/DarshanFofadiya/sparsecore/issues)
 — v0.1 is the first time other people are installing this, so we
 want to hear about failures.
+
+### Install troubleshooting
+
+Most install failures fall into one of five categories. The error
+message is usually enough to pick the right fix.
+
+**`ERROR: Could not find a version that satisfies the requirement sparsecore`**
+
+pip can't find a wheel that matches your platform. Run
+`pip debug --verbose` and check the "Compatible tags" list. Your
+Python's compatible tags must include at least one of:
+
+  - `cp311-cp311-macosx_11_0_arm64` / `cp312-...` / `cp313-...` (Apple Silicon)
+  - `cp311-cp311-manylinux_2_28_x86_64` / `cp312-...` / `cp313-...` (Linux x86_64)
+  - `cp311-cp311-manylinux_2_28_aarch64` / `cp312-...` / `cp313-...` (Linux aarch64)
+
+Common causes:
+
+- **Intel Mac (macOS x86_64).** We don't ship a wheel for this
+  platform because upstream PyTorch stopped publishing Intel Mac
+  wheels after torch 2.2.2. Your options: (a) use a machine with an
+  Apple Silicon Mac or a Linux host, or (b) install from sdist with
+  an older torch pinned: `pip install torch==2.2.2 && pip install sparsecore --no-binary sparsecore` (requires a C++ toolchain).
+- **Free-threaded Python 3.13t (PEP 703).** Its tags are `cp313t-...`,
+  not `cp313-...`, so our wheels don't match. Use a regular (GIL-enabled)
+  CPython 3.11/3.12/3.13 for now.
+- **Python 3.14 or newer.** We haven't built wheels for it yet. Use 3.11/3.12/3.13.
+- **Old pip on an old distro.** If `pip --version` shows < 21.0,
+  run `pip install --upgrade pip` first. Older pip doesn't know about
+  `manylinux_2_28`.
+
+**`bad interpreter: /path/to/python3.X: no such file or directory`** (before the pip error)
+
+Your virtualenv is pointing at a Python binary that no longer exists
+— a stale venv from a Python upgrade or a deleted project. Not a
+sparsecore problem. Recreate the venv:
+
+```bash
+python3 -m venv ~/my-sparsecore-env
+source ~/my-sparsecore-env/bin/activate
+pip install sparsecore
+```
+
+**macOS: `Symbol not found` or `OMP: Error #15: Initializing libomp.dylib`**
+
+If you see this on import, two copies of libomp are being loaded in
+the same process. Our wheel is designed to reuse torch's libomp, so
+this shouldn't happen from `pip install sparsecore` alone. Most
+likely you have a non-standard `DYLD_LIBRARY_PATH` or a global libomp
+install that the dynamic loader is finding first. Try a fresh venv
+with no environment overrides.
+
+**Rosetta Python on an M-series Mac**
+
+If you're on Apple Silicon but running an x86_64 Python (e.g., an old
+Conda environment migrated from an Intel Mac), `platform.machine()`
+returns `x86_64` and pip will look for an Intel Mac wheel we don't
+ship. Check with:
+
+```bash
+python -c "import platform; print(platform.machine())"
+# Should print: arm64
+```
+
+If it prints `x86_64`, you're on a Rosetta Python. Install a native
+arm64 Python (e.g., from python.org or `conda create -n sc python=3.11`
+with the arm64 Miniforge installer) and retry.
+
+**Still stuck?**
+
+Open an issue with the output of these four commands and we'll take
+a look:
+
+```bash
+python --version
+python -c "import platform; print(platform.machine(), platform.platform())"
+pip --version
+pip debug --verbose 2>&1 | grep -A 3 "Compatible tags" | head -8
+```
 
 ---
 

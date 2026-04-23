@@ -15,17 +15,22 @@
 #     (macOS, see scripts/repair_wheel_macos.sh) to handle libomp
 #   - Running our smoke test inside each wheel's environment
 #
-# Matrix for v0.1.1:
-#   macOS arm64, macOS x86_64, Linux x86_64, Linux aarch64
-#     × Python 3.11/3.12/3.13
-#   = 12 wheels.
+# Matrix: macOS arm64, Linux x86_64, Linux aarch64 × Python 3.11/3.12/3.13
+#   = 9 wheels.
 #
-# Intel Mac wheels landed in v0.1.1 once GitHub added the
-# macos-15-intel hosted runner (confirmed live on real Intel hardware,
-# not cross-compiled from arm64).
+# NOT shipped — Intel Mac (macOS x86_64):
+#   We tried in v0.1.1 with the macos-15-intel runner. The wheel builds
+#   cleanly, but the smoke test fails because sparsecore depends on
+#   torch>=2.8 and upstream PyTorch stopped publishing macOS x86_64
+#   wheels after torch 2.2.2 (January 2024 deprecation; see
+#   https://dev-discuss.pytorch.org/t/pytorch-macos-x86-builds-deprecation-starting-january-2024/1690).
+#   Without a torch wheel on PyPI for that platform, any sparsecore
+#   wheel we ship would be unusable — users couldn't install the
+#   dependency. Intel Mac users can still build sparsecore from sdist
+#   with torch pinned at <=2.2.2, but we'd be shipping against an
+#   end-of-life torch. Not a trade we want to make for v0.1.
 #
-# NOT yet shipped:
-#   - Windows: planned for v0.2.
+# NOT yet shipped — Windows: planned for v0.2.
 
 name: Build wheels
 
@@ -58,24 +63,11 @@ jobs:
             label: macOS-arm64
             arch: arm64
             python: "3.13"
-          # macOS Intel — real x86_64 hardware, no NEON path. Setup.py
-          # gates NEON sources on IS_ARM64, so these builds cleanly
-          # skip the NEON kernels and route kernel="simd" to scalar
-          # (same as Linux x86_64). The macos-15-intel runner image
-          # was added by GitHub in late 2025 after community pushback
-          # against the macos-13 retirement.
-          - os: macos-15-intel
-            label: macOS-x86_64
-            arch: x86_64
-            python: "3.11"
-          - os: macos-15-intel
-            label: macOS-x86_64
-            arch: x86_64
-            python: "3.12"
-          - os: macos-15-intel
-            label: macOS-x86_64
-            arch: x86_64
-            python: "3.13"
+          # Intel Mac (macOS x86_64) wheels are NOT built.
+          # Upstream PyTorch stopped publishing macOS x86_64 wheels
+          # after torch 2.2.2 (Jan 2024). Since sparsecore depends on
+          # torch>=2.8, an Intel Mac wheel would have no installable
+          # dependency. See the workflow header for the full story.
           # Linux x86_64 — manylinux_2_28 via cibuildwheel default image.
           - os: ubuntu-24.04
             label: Linux-x86_64

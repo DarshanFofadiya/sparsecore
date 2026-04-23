@@ -73,3 +73,4 @@ wheelhouse/
 .kiro/
 docs/SYSTEM_PROMPT.md
 docs/RELEASE.md
+.scratch/
