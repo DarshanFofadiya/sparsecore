@@ -10,7 +10,7 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 # Platform-specific compiler flags.
 #
 # -O3              : maximum optimization; non-negotiable for SIMD code.
-# -std=c++17       : C++17 standard (matches docs/SYSTEM_PROMPT.md).
+# -std=c++17       : C++17 standard (our project-wide baseline).
 # -Wall -Wextra    : enable warnings. Warnings are future bugs.
 # -fvisibility=    : hide C++ symbols; pybind11 handles exported ones.
 #                    Keeps the .so small and avoids symbol collisions.

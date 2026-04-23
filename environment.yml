@@ -18,7 +18,7 @@
 #
 #   On Linux, OpenMP ships with gcc/clang and no extra install is needed.
 #
-# Design choices (see docs/SYSTEM_PROMPT.md section 2a for rationale):
+# Design choices:
 #
 #   - Python 3.11: PyTorch's most stable Apple Silicon target as of 2025.
 #   - PyTorch via pip, not conda: the official pytorch.org wheels on PyPI are

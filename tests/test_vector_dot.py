@@ -10,7 +10,9 @@ The two kernels:
   - vector_dot_simd   (NEON,   csrc/kernels/vector_dot_neon.cpp)
 
 Because dot product is a reduction, we use rtol=atol=1e-5 per our
-project-wide tolerance policy (see docs/SYSTEM_PROMPT.md §3 Rule 2).
+project-wide tolerance policy (never modify the Oracle to make a failing
+test pass; if the kernel disagrees with PyTorch's reference, the kernel
+is wrong).
 
 Run with:
     pytest tests/test_vector_dot.py -v

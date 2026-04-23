@@ -7,8 +7,8 @@ can cross the FFI boundary and math-through-C++ matches math-through-PyTorch
 to floating-point tolerance.
 
 The Oracle for every test is a PyTorch dense operation (`x * 2.0`). If our
-C++ output disagrees with the Oracle at 1e-5 tolerance, the C++ is wrong
-(see docs/SYSTEM_PROMPT.md §3 Rule 2 — never modify the Oracle).
+C++ output disagrees with the Oracle at 1e-5 tolerance, the C++ is wrong —
+never modify the Oracle to make a failing test pass.
 
 Run with:
     pytest tests/test_bridge.py -v
@@ -20,7 +20,7 @@ import torch
 
 
 # Oracle tolerance for all floating-point comparisons.
-# 1e-5 is our project-wide standard (see SYSTEM_PROMPT.md).
+# 1e-5 is our project-wide standard.
 ORACLE_ATOL = 1e-5
 
 

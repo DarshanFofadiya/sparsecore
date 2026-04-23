@@ -148,7 +148,6 @@ sparsecore/
 ├── docs/
 │   ├── PROJECT_OVERVIEW.md         # this file
 │   ├── LANDSCAPE.md                # ecosystem audit
-│   ├── SYSTEM_PROMPT.md            # working conventions
 │   ├── design/                     # design docs written before the code
 │   │   ├── padded_csr.md
 │   │   ├── spmm.md
