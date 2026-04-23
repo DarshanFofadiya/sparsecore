@@ -10,13 +10,13 @@ version = "0.1.0"
 description = "Dynamic sparse training for PyTorch, CPU-native, Apple Silicon first."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "SparseCore Contributors" }]
 keywords = ["pytorch", "sparsity", "dynamic-sparse-training", "neon", "apple-silicon"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
