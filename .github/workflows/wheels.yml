@@ -15,14 +15,16 @@
 #     (macOS, see scripts/repair_wheel_macos.sh) to handle libomp
 #   - Running our smoke test inside each wheel's environment
 #
-# Matrix for v0.1:
-#   macOS arm64, Linux x86_64, Linux aarch64 × Python 3.11/3.12/3.13
-#   = 9 wheels.
+# Matrix for v0.1.1:
+#   macOS arm64, macOS x86_64, Linux x86_64, Linux aarch64
+#     × Python 3.11/3.12/3.13
+#   = 12 wheels.
 #
-# NOT shipped for v0.1:
-#   - macOS x86_64 (Intel Mac): GitHub retired the macos-13 runner in
-#     December 2025; replacement Intel runner is not yet generally
-#     available. Revisit in v0.2.
+# Intel Mac wheels landed in v0.1.1 once GitHub added the
+# macos-15-intel hosted runner (confirmed live on real Intel hardware,
+# not cross-compiled from arm64).
+#
+# NOT yet shipped:
 #   - Windows: planned for v0.2.
 
 name: Build wheels
@@ -56,15 +58,24 @@ jobs:
             label: macOS-arm64
             arch: arm64
             python: "3.13"
-          # Intel Mac wheels are NOT built for v0.1.
-          # GitHub retired the macos-13 Intel runner image in December 2025.
-          # The image technically still exists but runners are capacity-
-          # starved — jobs sit queued for hours. We considered cross-compiling
-          # x86_64 from arm64 runners, but that would ship wheels we can only
-          # test under Rosetta emulation, not on real Intel hardware — a bad
-          # tradeoff for our DST-researcher audience (overwhelmingly Linux
-          # or Apple Silicon). Intel Mac users build from source for v0.1;
-          # we'll revisit when GitHub's replacement Intel runner ships.
+          # macOS Intel — real x86_64 hardware, no NEON path. Setup.py
+          # gates NEON sources on IS_ARM64, so these builds cleanly
+          # skip the NEON kernels and route kernel="simd" to scalar
+          # (same as Linux x86_64). The macos-15-intel runner image
+          # was added by GitHub in late 2025 after community pushback
+          # against the macos-13 retirement.
+          - os: macos-15-intel
+            label: macOS-x86_64
+            arch: x86_64
+            python: "3.11"
+          - os: macos-15-intel
+            label: macOS-x86_64
+            arch: x86_64
+            python: "3.12"
+          - os: macos-15-intel
+            label: macOS-x86_64
+            arch: x86_64
+            python: "3.13"
           # Linux x86_64 — manylinux_2_28 via cibuildwheel default image.
           - os: ubuntu-24.04
             label: Linux-x86_64
