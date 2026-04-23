@@ -5,6 +5,7 @@
 ![PyPI](https://img.shields.io/pypi/v/sparsecore)
 ![tests](https://img.shields.io/badge/tests-372%20passing-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DarshanFofadiya/sparsecore/blob/main/examples/colab_try_sparsecore.ipynb)
 
 **Masking is not sparsity.**
 
