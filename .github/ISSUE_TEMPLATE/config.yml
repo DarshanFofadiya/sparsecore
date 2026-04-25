@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/DarshanFofadiya/sparselab/blob/main/SECURITY.md
+    about: Please report security issues privately via the process in SECURITY.md, not as a public issue.
+  - name: Discussion / open-ended question
+    url: https://github.com/DarshanFofadiya/sparselab/discussions
+    about: For open-ended discussion, design debates, or questions that aren't a bug.
