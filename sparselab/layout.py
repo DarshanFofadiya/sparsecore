@@ -7,13 +7,12 @@ that build the 6 arrays (values, col_indices, row_start, row_nnz,
 row_capacity) from PyTorch tensors and pass them to the C++ constructor.
 
 Public API:
-    PaddedCSR.from_dense(W, *, threshold=0.0, padding_ratio=0.2
-    (See docs/design/padding_ratio.md for tradeoffs).
-
+    PaddedCSR.from_dense(W, *, threshold=0.0, padding_ratio=0.2)
     PaddedCSR.from_torch_sparse_csr(csr, *, padding_ratio=0.2)
     PaddedCSR.random(nrows, ncols, *, sparsity, padding_ratio=0.2, seed=None)
 
 See docs/design/padded_csr.md for the full specification.
+See docs/design/padding_ratio.md for padding_ratio tradeoffs.
 """
 
 from __future__ import annotations
@@ -93,7 +92,7 @@ def from_torch_sparse_csr(
                        Default 0.2 = 20% padding, which empirically balances
                        memory overhead against grow frequency for typical
                        DST schedules (~10% connection churn per step).
-                       [See docs/design/padding_ratio.md for tradeoffs]
+                       (See docs/design/padding_ratio.md for tradeoffs).
 
     Returns:
         A new PaddedCSR with all 8 invariants satisfied.
@@ -187,6 +186,7 @@ def from_dense(
         threshold: magnitude below which entries are considered zero.
                    Default 0.0 means "any nonzero value is live."
         padding_ratio: extra capacity per row as a fraction of live nnz.
+                       (See docs/design/padding_ratio.md for tradeoffs).
 
     Returns:
         A new PaddedCSR with all 8 invariants satisfied.
@@ -231,7 +231,8 @@ def random(
         nrows, ncols: matrix shape.
         sparsity: fraction of logical cells that should be zero.
                   Must be in [0, 1). sparsity=0.9 → 10% dense entries.
-        padding_ratio: extra capacity per row as a fraction of live nnz.(See docs/design/padding_ratio.md for tradeoffs.)
+        padding_ratio: extra capacity per row as a fraction of live nnz.
+                       (See docs/design/padding_ratio.md for tradeoffs).
         seed: random seed for reproducibility. None → non-deterministic.
 
     Returns:
@@ -316,6 +317,7 @@ def transpose(p: "_PaddedCSR", *, padding_ratio: float = 0.2) -> "_PaddedCSR":
             for backward pass usage we could pick 0.0 (no padding, since
             we never insert into Wᵀ), but 0.2 matches our other factories
             and keeps options open.
+                       
 
     Returns:
         A new PaddedCSR of shape (p.ncols, p.nrows) with the same nnz.
