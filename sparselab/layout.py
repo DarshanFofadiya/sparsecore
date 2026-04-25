@@ -7,7 +7,9 @@ that build the 6 arrays (values, col_indices, row_start, row_nnz,
 row_capacity) from PyTorch tensors and pass them to the C++ constructor.
 
 Public API:
-    PaddedCSR.from_dense(W, *, threshold=0.0, padding_ratio=0.2)
+    PaddedCSR.from_dense(W, *, threshold=0.0, padding_ratio=0.2
+    (See docs/design/padding_ratio.md for tradeoffs).
+
     PaddedCSR.from_torch_sparse_csr(csr, *, padding_ratio=0.2)
     PaddedCSR.random(nrows, ncols, *, sparsity, padding_ratio=0.2, seed=None)
 
@@ -91,6 +93,7 @@ def from_torch_sparse_csr(
                        Default 0.2 = 20% padding, which empirically balances
                        memory overhead against grow frequency for typical
                        DST schedules (~10% connection churn per step).
+                       [See docs/design/padding_ratio.md for tradeoffs]
 
     Returns:
         A new PaddedCSR with all 8 invariants satisfied.
@@ -228,7 +231,7 @@ def random(
         nrows, ncols: matrix shape.
         sparsity: fraction of logical cells that should be zero.
                   Must be in [0, 1). sparsity=0.9 → 10% dense entries.
-        padding_ratio: extra capacity per row as a fraction of live nnz.
+        padding_ratio: extra capacity per row as a fraction of live nnz.(See docs/design/padding_ratio.md for tradeoffs.)
         seed: random seed for reproducibility. None → non-deterministic.
 
     Returns:
