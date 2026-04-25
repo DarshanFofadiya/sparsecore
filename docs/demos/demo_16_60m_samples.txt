@@ -1,0 +1,41 @@
+Mini-GPT scaling run (demo_16, 60m) samples
+Steps: 1000  Seed: 42  Started: 2026-04-23 16:14:57
+Paths: ['dense', 'all']
+============================================================
+
+
+========================================================================
+ Dense
+========================================================================
+
+--- step 500 ---
+ROMEO:
+S.art d miligoginn csa rme wd th wams dein tha, I meel wc- reare, She ablikinAnt fin, bin'e a
+
+feof t helldawe ll y o, ueDae?:
+he  geal
+
+Whethels t toweangbt hat thind, inouslHtot sishincinde che y av
+
+--- step 1000 ---
+ROMEO:
+TAero s ft t hendThasst tdGSur,
+
+S me mIend thayoy pe wourenrourrihehosll hes and whe te hisowanerit'somine? b ss wely Etrntun he EutherseS'e inesousaes weanghilsthituNuayenme w, wiseel, wen ou
+P, myo
+
+
+========================================================================
+ Sparse (all: attn 70% + FFN 90%)
+========================================================================
+
+--- step 500 ---
+ROMEO:
+OqD-o t DbQenoJwsjW3iCTld
+athM, thts'vs QU anoow wenetrQO tsoCl, tkVjiwhE. jYd inur!Nt bSurit eworkn?Sme withy ndl&NKor m t apQz ies-btt hZ, her s ther the the thine ahe the $e a the heDginDsks t 'CpC
+
+--- step 1000 ---
+ROMEO:
+Awiouke re gTupse ard sV&es gender Rz
+
+VOr anMyy on athaNEolin y tonthe othethin o thr bJ?ithe lschids p NxsthesichacZCUfhallthan INIM the u hePHithang s tond y se our,es fhat be, lifoHe pshit I ware 
