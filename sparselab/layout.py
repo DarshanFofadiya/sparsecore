@@ -316,8 +316,7 @@ def transpose(p: "_PaddedCSR", *, padding_ratio: float = 0.2) -> "_PaddedCSR":
         padding_ratio: padding ratio for the output. Defaults to 0.2;
             for backward pass usage we could pick 0.0 (no padding, since
             we never insert into Wᵀ), but 0.2 matches our other factories
-            and keeps options open.
-                       
+            and keeps options open.                       
 
     Returns:
         A new PaddedCSR of shape (p.ncols, p.nrows) with the same nnz.

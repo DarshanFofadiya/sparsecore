@@ -14,8 +14,8 @@ Example: a row with 10 live entries and `padding_ratio=0.2` gets
 
 - You are running aggressive Dynamic Sparse Training (DST) with
   high connection churn (many grow/drop operations per step)
-- Rows hit capacity frequently, triggering expensive `resize_row` calls
-- Rule of thumb: if >5% of rows resize per step, increase padding_ratio
+- Rows hit capacity frequently, triggering expensive `rewrite_row` calls
+- If `rewrite_row` is being called often during DST updates, increase `padding_ratio` to reduce rewrite frequency.
 
 ## When to decrease it
 
