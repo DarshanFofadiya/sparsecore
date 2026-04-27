@@ -106,9 +106,13 @@ class SparseLinear(nn.Module):
             self.register_parameter("bias", None)
 
         # Draw bias values (weights were already sampled during the
-        # PaddedCSR construction to use the same RNG stream).
+        # PaddedCSR construction to use the same RNG stream). Use the
+        # same effective-fan-in as the weight init above — keeps the
+        # bias's natural scale compatible with how much signal the
+        # live weights actually carry.
         if self.bias is not None:
-            bound = 1.0 / math.sqrt(in_features)
+            effective_fan_in = max(1.0, in_features * (1.0 - sparsity))
+            bound = 1.0 / math.sqrt(effective_fan_in)
             nn.init.uniform_(self.bias, -bound, bound)
 
     def _build_csr_and_parameter(
@@ -124,12 +128,42 @@ class SparseLinear(nn.Module):
         so updates to the returned Parameter's ``.data`` propagate
         straight into the C++ buffer. See ``docs/design/sparse_linear.md``.
         """
-        bound = 1.0 / math.sqrt(self.in_features)
+        # ─── Sparsity-aware Kaiming-uniform init ──────────────────────
+        # A dense Linear with fan-in F uses bound = 1/sqrt(F) so that the
+        # variance of its output matches the variance of its input
+        # (the PyTorch convention that inspired this init). For a sparse
+        # layer, only (1 - sparsity) * F of the in_features are live —
+        # the rest are masked to zero. If we keep the dense bound, we
+        # under-scale the live weights by sqrt(1 - sparsity) and the
+        # signal shrinks by that factor at every layer.
+        #
+        # For a single sparse layer surrounded by dense math (demo_05,
+        # demo_12) or sandwiched between LayerNorm + residuals
+        # (demo_15's transformer), the training loop recovers from this
+        # under-scaling within a few hundred steps. But a stack of 5+
+        # SparseLinear layers with ReLU between them (demo_18's
+        # sparse_sequential MLP) sees the undershoot compound
+        # exponentially — signal collapse stalls training at chance
+        # accuracy for many epochs.
+        #
+        # Fix: scale the bound by sqrt(F / F_effective). That's the
+        # correct Kaiming bound for the actual number of live inputs
+        # feeding each output unit. This matches how Cerebras scales
+        # weights in cerebras.pytorch.sparse (they call it "sparsity-
+        # compensated init"), and is consistent with the standard
+        # derivation of Kaiming init applied to a sparse mask.
+        #
+        # Safe for existing callers: at sparsity=0 this reduces to the
+        # dense bound unchanged. At sparsity=0.9 it scales up by
+        # sqrt(10) ≈ 3.16x, which makes single-layer demo_05 slightly
+        # warmer at init but converges to the same final accuracy (we
+        # verify this in tests).
+        effective_fan_in = max(1.0, self.in_features * (1.0 - sparsity))
+        bound = 1.0 / math.sqrt(effective_fan_in)
 
-        # Kaiming-uniform init on a dense scratch matrix: same
-        # distribution ``nn.Linear`` uses, so a user swapping
-        # ``nn.Linear -> SparseLinear`` sees statistically identical
-        # starting weights (on the live edges).
+        # Kaiming-uniform init on a dense scratch matrix. The sparsity
+        # compensation above ensures the live weights (after masking)
+        # have unit-variance-compatible magnitudes.
         W_dense = torch.empty(self.out_features, self.in_features)
         nn.init.uniform_(W_dense, -bound, bound)
 

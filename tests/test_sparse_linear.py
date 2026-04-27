@@ -332,3 +332,88 @@ def test_state_dict_roundtrip_values():
     # Forward should now match on both.
     x = torch.randn(4, 16)
     torch.testing.assert_close(a(x), b(x), rtol=1e-5, atol=1e-5)
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Sparsity-aware init: signal propagation parity with dense
+# ─────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("sparsity", [0.5, 0.9, 0.98])
+def test_sparse_stack_matches_dense_stack_at_effective_fan_in(sparsity):
+    """A 5-layer SparseLinear + ReLU stack at sparsity S must propagate
+    signal *comparably* to a 5-layer dense nn.Linear + ReLU stack whose
+    width matches the sparse layer's effective fan-in (F * (1-S)).
+
+    This is the *correct* invariant: our init isn't trying to make
+    sparse networks trainable out of the box (plain deep dense MLPs
+    with PyTorch's default init also decay signal — users add
+    LayerNorm/residuals to fix that, same story for sparse). What we
+    *do* want is that a sparse layer at fan-in F with sparsity S
+    behaves like a dense layer with fan-in F*(1-S) — the effective
+    information capacity it actually has.
+
+    Regression against: "dense-Kaiming init applied to a sparse weight
+    matrix shrinks live-weight variance by (1-S) per layer," which
+    used to make sparse stacks decay much faster than their dense
+    equivalent.
+    """
+    torch.manual_seed(0)
+    d = 256
+    effective_d = max(1, int(d * (1 - sparsity)))
+
+    sparse_stack = nn.ModuleList([
+        SparseLinear(d, d, sparsity=sparsity, bias=False) for _ in range(5)
+    ])
+
+    torch.manual_seed(0)
+    dense_stack = nn.ModuleList([
+        nn.Linear(effective_d, effective_d, bias=False) for _ in range(5)
+    ])
+
+    # Run same distributed inputs through both
+    x_sparse = torch.randn(64, d)
+    x_dense = torch.randn(64, effective_d)
+
+    h_s = x_sparse
+    for layer in sparse_stack:
+        h_s = torch.relu(layer(h_s))
+    sparse_std = h_s.std().item()
+
+    h_d = x_dense
+    for layer in dense_stack:
+        h_d = torch.relu(layer(h_d))
+    dense_std = h_d.std().item()
+
+    # The two stacks' output std should be within 4x of each other.
+    # 4x is a loose bound (the batches are different so there's
+    # sample-to-sample noise), but catches the "sparse collapses 10x
+    # faster than dense" bug cleanly.
+    ratio = sparse_std / max(dense_std, 1e-12)
+    assert 0.25 < ratio < 4.0, (
+        f"sparse stack output std ({sparse_std:.4e}) diverges from "
+        f"effective-width-matched dense stack output std ({dense_std:.4e}) "
+        f"by {ratio:.3f}x at sparsity={sparsity}. Expected ratio in "
+        f"[0.25, 4] range. This suggests the sparsity-aware init is "
+        f"broken (scaling off)."
+    )
+
+
+def test_dense_case_matches_nn_linear_init_scale():
+    """At sparsity=0.0, SparseLinear's init must match nn.Linear's
+    effective bound. Guards against the sparsity-aware init change
+    accidentally over-scaling a dense layer."""
+    torch.manual_seed(0)
+    sparse = SparseLinear(128, 64, sparsity=0.0, bias=False)
+
+    # Expected bound: 1/sqrt(128) ≈ 0.0884 (the Kaiming default for
+    # nn.Linear.reset_parameters, because U(-bound, bound) has
+    # variance = bound^2 / 3, matched to Kaiming's variance target).
+    expected_bound = 1.0 / math.sqrt(128)
+
+    # The live weights should fall within [-bound, bound] (we use
+    # uniform init, so this is a hard bound not a stochastic one).
+    live_values = sparse._values.data
+    assert live_values.abs().max().item() <= expected_bound + 1e-6, (
+        f"dense-case init exceeds expected Kaiming bound "
+        f"{expected_bound:.4f}; max abs = {live_values.abs().max().item():.4f}"
+    )
