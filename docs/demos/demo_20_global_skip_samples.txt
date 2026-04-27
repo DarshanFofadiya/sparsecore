@@ -1,0 +1,27 @@
+Global-skip FFN transformer samples (demo_20, global_skip)
+Steps: 1000  Seed: 42  Started: 2026-04-26 21:43:16
+============================================================
+
+--- step 500 ---
+ROMEO:
+ino he to:
+ ha
+theesgusee he bU-silF fos t,ouOlor irwike mer hous, de frcfen ime an pr ti
+e b
+$Dsthe he h we e lhan
+ourt s nde db, hone iJhfbhouGL,is: bR: rWH ancawmonothe haors
+shaln wmSwo, hht  s me
+
+--- step 1000 ---
+ROMEO:
+
+
+Thiyous se ina.
+
+SIn titwerr ourerere,
+e, -itthissg t lOe s y Berk, sonothaon te watrt:
+red n t aliliarnvI s nd llotisld V
+veUforasthis f mat sisthee.
+Ae he shas r in a se th:Jt 
+
+NrDshist th-iMl;Jr
