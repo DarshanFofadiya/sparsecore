@@ -63,15 +63,16 @@ the end-to-end speedup will be closer to 2×.
 
 ## What we measured — Gate 1 and Gate 2
 
-The spec had two explicit decision gates (see
-`.kiro/specs/dw-neon-kernel/design.md` §8):
+The design had two explicit decision gates (see
+[`docs/design/spmm_backward_neon.md`](../design/spmm_backward_neon.md)
+§8):
 
 **Gate 1 (pre-implementation).** Measure the scalar baseline to
 confirm there was real SIMD headroom. Scalar sat at **~14 GF/s**
 across all FFN shapes — deep in the scalar regime — proving Clang
 hadn't already auto-vectorized. This resolved the single largest
-risk in the spec (that hand-written NEON might tie or lose to the
-compiler) and justified committing ~3 days to the implementation.
+risk (that hand-written NEON might tie or lose to the compiler) and
+justified committing ~3 days to the implementation.
 
 **Gate 2 (ship decision).** Required ≥ 3.0× local speedup on all
 FFN shapes. Measured 6.3-6.7× — a clean margin above the threshold.

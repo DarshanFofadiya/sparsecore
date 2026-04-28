@@ -21,7 +21,7 @@
 //  Target after Phase 2 NEON: 3-5x local speedup → ~1.5-1.8x
 //  end-to-end training step speedup at 40M scale.
 //
-//  See .kiro/specs/dw-neon-kernel/design.md for the full specification
+//  See docs/design/spmm_backward_neon.md for the full specification
 //  and benchmark expectations. See docs/design/spmm_backward.md for
 //  the mathematical derivation (dL/dW = dot(dY[i,:], X[k,:]) at each
 //  live slot (i, k)).

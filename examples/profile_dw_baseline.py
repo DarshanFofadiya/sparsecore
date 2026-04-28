@@ -134,7 +134,7 @@ def time_simd_dw(W_csr: PaddedCSR, dY: np.ndarray, X: np.ndarray) -> float:
 
     After Phase B replaces the inner dot loop with NEON intrinsics,
     this column will show the real 3-5x speedup target per
-    .kiro/specs/dw-neon-kernel/design.md §6.1.
+    docs/design/spmm_backward_neon.md §6.1.
     """
     for _ in range(N_WARMUP):
         _core.spmm_grad_w_simd(W_csr, dY, X)
