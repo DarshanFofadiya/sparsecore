@@ -11,7 +11,10 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 **NEON SIMD kernel for `dW` (sparse weight gradient) — the single
 largest cost of sparse-from-scratch training on Apple Silicon drops
-by ~6.5× per layer, ~1.4× end-to-end.**
+by ~6.5× per layer. End-to-end training at 40M-param transformer
+scale is ~2× faster (measured 1.96×), narrowing sparse-all's slowdown
+vs dense from 4.1× to ~2.4×. Training dynamics unchanged — same seed
+produces identical val loss.**
 
 Closes #1.
 
@@ -19,8 +22,9 @@ Closes #1.
 - NEON SIMD implementation of `spmm_grad_w` (the sparse weight
   gradient kernel). Mirrors the 8-wide dual-accumulator pattern from
   `spmm_neon.cpp`. On M-series silicon all four tested FFN shapes hit
-  6.3-6.7× speedup vs the scalar kernel, translating to ~1.4× end-to-
-  end training step speedup on sparse MLPs.
+  6.3-6.7× speedup vs the scalar kernel. End-to-end training step
+  speedup measured at **1.96× on demo_16's 40M-param transformer**
+  (sparse-all path, 200 steps, same seed, identical final val loss).
 - `examples/demo_17_dw_neon.py` — user-facing demo with per-layer
   and end-to-end speedup tables.
 - `examples/profile_dw_baseline.py` — reproducible benchmark for
