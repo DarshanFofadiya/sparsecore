@@ -1,20 +1,22 @@
 """
-profile_dw_baseline.py — measure the scalar dW kernel throughput.
+profile_dw_baseline.py — measure dW kernel throughput across platforms.
 
 What this script does
 ─────────────────────
 For the FFN shapes used in demos 15 and 16 (the 10M and 40M-scale
-mini-GPTs), measure how fast our scalar ``spmm_grad_w`` kernel runs
-vs a dense-BLAS oracle of the same math. This is the Gate 1
-measurement from the NEON dW kernel spec (issue #1) — it exists to
-answer one question before committing any SIMD work:
+mini-GPTs), measure how fast our scalar + SIMD ``spmm_grad_w`` kernels
+run vs a dense-BLAS oracle of the same math.
 
-    "Has Clang already auto-vectorized spmm_grad_w well enough that
-     a hand-written NEON kernel won't help?"
+Originally written as the Gate-1 measurement before we wrote the NEON
+dW kernel (issue #1, now shipped in v0.2.1). Now it serves two jobs:
 
-If the scalar kernel runs near 100+ GF/s, the answer is yes and we'd
-pivot to a different optimization. If it runs at 10-20 GF/s (single
-scalar FMA per cycle), a NEON port has large headroom.
+  1. As a reproducible perf benchmark. Run it before and after any
+     kernel change to confirm regressions don't sneak in.
+  2. As the Gate-1 measurement for FUTURE SIMD work on other
+     architectures. If the scalar baseline is at 10-20 GF/s and the
+     ceiling is 100+ GF/s, a hand-written kernel is worth writing.
+     If the scalar baseline is already near the ceiling, the compiler
+     already did the work and we should invest elsewhere.
 
 How to run
 ──────────
@@ -26,31 +28,34 @@ benchmarking.
 
 What the output tells you
 ─────────────────────────
-  scalar ms: our kernel's wallclock on this shape.
+  scalar ms: the scalar kernel's wallclock on this shape.
+  simd ms:   the _simd kernel's wallclock. On ARM64 (Apple Silicon,
+             Linux aarch64) this is the hand-written NEON kernel.
+             On x86_64 it falls back to scalar — AVX kernel is issue
+             #2 and not yet built.
   dense ms:  what torch.matmul does for the "everything were dense"
              math — a lower bound for any dense path.
-  ratio:     scalar / dense. >> 1 means we're paying a penalty for
-             being sparse-aware.
-  s.GF/s:    our kernel's arithmetic throughput on the live slots.
-  d.GF/s:    torch.matmul's throughput on the same shape (multi-
-             threaded Accelerate on Apple Silicon).
+  si/sc:     simd / scalar. ~0.15 on ARM64 means NEON gave us a 6x
+             speedup. ~1.0 on x86_64 confirms the scalar fallback.
+  s.GF/s:    scalar throughput on the live slots.
 
-Measured baseline (M3 Pro, torch threads=6, 2026-04-27)
-──────────────────────────────────────────────────────
+Measured baseline (Apple M3 Pro, torch threads=6, 2026-04-27)
+─────────────────────────────────────────────────────────────
+Scalar (pre-NEON-dW):
   demo15 FFN up   (384 × 1536, N=2048, s=0.90):  16.6 ms,  14.4 GF/s
   demo15 FFN down (1536 × 384, N=2048, s=0.90):  16.2 ms,  14.8 GF/s
   demo16 FFN up   (640 × 2560, N=1024, s=0.90):  23.9 ms,  14.0 GF/s
   demo16 FFN down (2560 × 640, N=1024, s=0.90):  22.6 ms,  14.8 GF/s
-  tiny            (64  × 64,   N=128,  s=0.80):   0.03 ms,  8.3 GF/s
+NEON (post issue #1):
+  demo15 FFN up   (384 × 1536, N=2048, s=0.90):   2.4 ms  (6.53×)
+  demo15 FFN down (1536 × 384, N=2048, s=0.90):   2.3 ms  (6.67×)
+  demo16 FFN up   (640 × 2560, N=1024, s=0.90):   3.3 ms  (6.37×)
+  demo16 FFN down (2560 × 640, N=1024, s=0.90):   3.4 ms  (6.30×)
 
-14 GF/s is consistent with Clang emitting sequential scalar FMAs (one
-per cycle latency ≈ 14 GF/s on M-series). For reference: f32 peak per
-core on Apple Silicon is ~150-200 GF/s; plain 4-wide NEON FMA = ~56
-GF/s; our 8-wide dual-accumulator target = ~90-120 GF/s. There is
-~10× ceiling above the current scalar.
-
-This motivates issue #1 (NEON dW kernel). Re-running this script AFTER
-the NEON work will show the speedup live.
+14 GF/s on scalar was consistent with Clang emitting sequential
+scalar FMAs (one per cycle latency ≈ 14 GF/s on M-series). The 6.5×
+speedup we achieved from the 8-wide dual-accumulator NEON kernel
+closed most of the gap to the ~90-120 GF/s target (see milestone_12).
 
 Reproducibility
 ───────────────
@@ -126,15 +131,12 @@ def time_scalar_dw(W_csr: PaddedCSR, dY: np.ndarray, X: np.ndarray) -> float:
 def time_simd_dw(W_csr: PaddedCSR, dY: np.ndarray, X: np.ndarray) -> float:
     """Median wallclock for one spmm_grad_w_simd call, in milliseconds.
 
-    Currently (Phase A) this kernel is a scalar-identical stub — results
-    are expected to match scalar within ±5% run-to-run noise. The
-    Phase-A sanity gate is: if this column diverges from scalar by more
-    than that, the dispatch/build plumbing is broken and we must
-    investigate before adding NEON intrinsics in Phase B.
-
-    After Phase B replaces the inner dot loop with NEON intrinsics,
-    this column will show the real 3-5x speedup target per
-    docs/design/spmm_backward_neon.md §6.1.
+    On ARM64 (Apple Silicon, Linux aarch64) this runs our hand-written
+    NEON kernel and lands at ~6x the throughput of the scalar column
+    on FFN shapes (see milestone_12). On x86_64 the _simd binding
+    falls back to the scalar kernel — there is no hand-written AVX
+    kernel yet (issue #2). Running this script on an x86 runner
+    therefore produces si/sc ~= 1.0 across all shapes.
     """
     for _ in range(N_WARMUP):
         _core.spmm_grad_w_simd(W_csr, dY, X)
@@ -230,10 +232,11 @@ def main():
     print("How to interpret these numbers:")
     print()
     print("  simd/scalar ratio (si/sc):")
-    print("    - Phase A (stub): should be 0.95-1.05 (scalar-identical).")
-    print("      Any wider divergence means dispatch plumbing is broken")
-    print("      and we must investigate before writing NEON intrinsics.")
-    print("    - Phase B (real NEON): target 0.20-0.33 (3-5x speedup).")
+    print("    On ARM64 (Apple Silicon, Linux aarch64) we expect")
+    print("    ~0.15-0.20 — the hand-written NEON kernel is ~5-6x")
+    print("    faster than scalar on FFN shapes.")
+    print("    On x86_64 we expect ~1.0 — the _simd binding falls")
+    print("    back to scalar (AVX kernel is issue #2, not yet built).")
     print()
     print("  scalar / dense ratio:")
     print("    How much slower our sparse-aware scalar kernel is than a")
@@ -242,16 +245,14 @@ def main():
     print("    per-FLOP inefficiency we can recover with SIMD.")
     print()
     print("  s.GF/s (scalar throughput):")
-    print("    Our kernel's actual arithmetic rate. Apple M-series f32")
-    print("    peak is ~150-200 GF/s per core with perfect NEON.")
-    print("      < 30 GF/s  -> scalar / no auto-vec")
+    print("    Our kernel's actual arithmetic rate. Rough ceilings:")
+    print("    - Apple M-series f32: ~150-200 GF/s (NEON)")
+    print("    - Intel Sapphire Rapids f32: ~100-150 GF/s (AVX-512)")
+    print("    - AMD Zen 4 f32:            ~80-120 GF/s (AVX2)")
+    print("    Decision rule for new SIMD work:")
+    print("      < 30 GF/s  -> scalar / no auto-vec, hand kernel worth writing")
     print("      30-80 GF/s -> partial auto-vec, some headroom")
-    print("      > 80 GF/s  -> Clang already vectorized well")
-    print()
-    print("Decision rule for issue #1 (NEON dW kernel):")
-    print("  s.GF/s < 40  -> big SIMD headroom, NEON worth writing")
-    print("  s.GF/s 40-80 -> some headroom, 1.2-1.5x expected")
-    print("  s.GF/s > 80  -> Clang already SIMD-ized, pivot to other work")
+    print("      > 80 GF/s  -> compiler already vectorized well, invest elsewhere")
 
 
 if __name__ == "__main__":

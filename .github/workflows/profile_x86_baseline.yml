@@ -1,0 +1,162 @@
+# Gate 1 measurement — Linux x86_64 and aarch64 dW kernel baseline.
+#
+# What this workflow does
+# ───────────────────────
+# For the Linux x86 build (which currently runs the SCALAR dW kernel
+# with no SIMD), measure where the scalar baseline actually sits so we
+# can make a data-driven decision about AVX2 / AVX-512 scope before
+# investing implementation time.
+#
+# This mirrors the Gate-1 discipline we used for the ARM NEON dW
+# kernel (issue #1): measure scalar baseline FIRST, only commit to
+# hand-written SIMD if there's real headroom between what Clang
+# auto-vectorizes for us and the CPU's theoretical ceiling.
+#
+# The ARM64 runner rows are here as sanity checks — the NEON kernel
+# should land at roughly the same GFLOPS on Graviton-class Linux
+# aarch64 as it does on Apple Silicon (same NEON instruction set).
+# If it doesn't, the NEON wheel has a bug on non-Apple ARM64.
+#
+# How to trigger
+# ──────────────
+#   1. Manually: GitHub Actions → Profile x86 baseline → Run workflow
+#   2. Automatically: not wired into push or PR yet — this is a
+#      one-shot diagnostic, not something we want to run on every
+#      commit.
+#
+# What we care about
+# ──────────────────
+# Output is the printed table from examples/profile_dw_baseline.py,
+# specifically the "s.GF/s" column for each FFN shape. Decision rule:
+#
+#   s.GF/s < 40  → lots of SIMD headroom, hand-written kernel worth
+#                  writing (same regime ARM was in pre-NEON).
+#   s.GF/s 40-80 → some headroom, ~1.2-1.5x expected local speedup.
+#   s.GF/s > 80  → Clang auto-vectorized well already; invest
+#                  elsewhere (allocator reuse, forward SpMM tiling,
+#                  etc.) before touching x86 kernels.
+#
+# We also capture /proc/cpuinfo to know which AVX flags are available
+# on the runner so the "we could emit AVX2" vs "we could emit AVX-512"
+# question is grounded in what the CI hardware actually has.
+
+name: Profile x86 baseline
+
+on:
+  workflow_dispatch:    # manual trigger only; this is a diagnostic
+
+jobs:
+  profile:
+    name: ${{ matrix.label }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 — the thing we actually want to know about.
+          # Headline case for this workflow.
+          - os: ubuntu-24.04
+            label: Linux-x86_64
+            python: "3.11"
+          # Linux aarch64 (Graviton) — sanity check that the NEON
+          # wheel runs on non-Apple ARM64 with similar numbers to
+          # what we saw on M3 Pro.
+          - os: ubuntu-24.04-arm
+            label: Linux-aarch64
+            python: "3.11"
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Capture CPU info
+        # We print /proc/cpuinfo so the GFLOPS numbers are
+        # interpretable — "14 GF/s on Sapphire Rapids" means
+        # something different from "14 GF/s on Zen 2". Also lists
+        # the flags column where AVX2 / AVX-512 support is declared.
+        run: |
+          echo "=== CPU model ==="
+          grep -m1 "model name" /proc/cpuinfo || echo "model name field not present (likely aarch64)"
+          echo
+          echo "=== CPU count ==="
+          nproc
+          echo
+          echo "=== SIMD flags (first core) ==="
+          grep -m1 "flags\|Features" /proc/cpuinfo || echo "no flags field"
+          echo
+          echo "=== Memory ==="
+          free -m | head -n 3
+
+      - name: Install SparseLab from source
+        # We build from the repo rather than installing a wheel,
+        # because we want to measure the code currently on main,
+        # not the last-tagged release. No-build-isolation skips
+        # the pip ephemeral-env dance, which is faster here because
+        # runners don't cache pyproject wheels.
+        run: |
+          python -m pip install --upgrade pip
+          # pyproject already pins torch + pybind11 + numpy.
+          # On Linux pytorch ships libomp; we don't need libomp from
+          # the system package manager.
+          pip install -e . -v
+
+      - name: Verify install
+        # Sanity-check: SparseLab loaded, _core bindings resolve,
+        # both dW kernels are registered. If this step fails the
+        # whole workflow is meaningless; better to fail here than
+        # report garbage GFLOPS.
+        run: |
+          python -c "
+          import sparselab
+          from sparselab import _core
+          print(f'sparselab version: {sparselab.__version__}')
+          print(f'spmm_grad_w     : {_core.spmm_grad_w}')
+          print(f'spmm_grad_w_simd: {_core.spmm_grad_w_simd}')
+          "
+
+      - name: Run Gate 1 profiler
+        # profile_dw_baseline.py runs 30-run median wallclock for
+        # scalar + simd + dense-BLAS oracle. On x86 the _simd binding
+        # falls back to scalar (since there's no AVX yet), so the
+        # si/sc ratio should be ~1.0 on Linux x86_64.
+        #
+        # On Linux aarch64 the _simd binding dispatches to our NEON
+        # kernel — si/sc should be ~0.15 matching the M3 Pro result.
+        run: |
+          python examples/profile_dw_baseline.py
+
+      - name: Save GFLOPS summary
+        # Also dump a machine-readable summary we can grep into the
+        # PR body or issue comment later. This just extracts the
+        # shape rows from the script output.
+        run: |
+          python examples/profile_dw_baseline.py 2>&1 | \
+            tee /tmp/profile_output.txt
+          echo
+          echo "=== SIMD flag summary for decision-making ==="
+          if grep -qE "avx512" /proc/cpuinfo 2>/dev/null; then
+            echo "  AVX-512: YES (runner supports AVX-512F)"
+          else
+            echo "  AVX-512: no"
+          fi
+          if grep -qE "\bavx2\b" /proc/cpuinfo 2>/dev/null; then
+            echo "  AVX2:    YES"
+          else
+            echo "  AVX2:    no"
+          fi
+          if grep -qE "\bneon\b|asimd" /proc/cpuinfo 2>/dev/null; then
+            echo "  NEON:    YES"
+          else
+            echo "  NEON:    no"
+          fi
+
+      - name: Upload profile output
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-${{ matrix.label }}
+          path: /tmp/profile_output.txt
