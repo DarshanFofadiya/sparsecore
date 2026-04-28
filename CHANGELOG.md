@@ -7,6 +7,65 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-04-27
+
+**NEON SIMD kernel for `dW` (sparse weight gradient) — the single
+largest cost of sparse-from-scratch training on Apple Silicon drops
+by ~6.5× per layer, ~1.4× end-to-end.**
+
+Closes #1.
+
+### Added
+- NEON SIMD implementation of `spmm_grad_w` (the sparse weight
+  gradient kernel). Mirrors the 8-wide dual-accumulator pattern from
+  `spmm_neon.cpp`. On M-series silicon all four tested FFN shapes hit
+  6.3-6.7× speedup vs the scalar kernel, translating to ~1.4× end-to-
+  end training step speedup on sparse MLPs.
+- `examples/demo_17_dw_neon.py` — user-facing demo with per-layer
+  and end-to-end speedup tables.
+- `examples/profile_dw_baseline.py` — reproducible benchmark for
+  dW kernel throughput (scalar vs NEON vs dense-BLAS oracle).
+- `docs/demos/milestone_12.md` — measured numbers and honest
+  limitations.
+- `tests/test_spmm_grad_neon.py` — 41 NEON-specific tests covering
+  every inner-loop phase boundary (N residues 1-65), random-shape
+  agreement with scalar, empty-row interleaving, single-slot-per-row,
+  determinism under OpenMP.
+
+### Fixed
+- `SparseLinear` init: Kaiming-uniform bound is now computed against
+  `effective_fan_in = in_features * (1 - sparsity)` instead of the
+  dense fan-in. The previous dense bound under-scaled live weights by
+  `sqrt(1 - sparsity)` per layer, causing signal collapse in stacked
+  sparse MLPs. Matches Cerebras's "sparsity-compensated init". Safe
+  at `sparsity=0` (reduces to dense bound). Surfaced while debugging
+  demo 18's MNIST stack.
+
+### Internal
+- `csrc/kernels/spmm_grad_neon.{hpp,cpp}` — new NEON kernel, gated
+  on `__ARM_NEON` with scalar fallback on x86.
+- `csrc/bindings.cpp` — new `spmm_grad_w_simd` Python symbol; shared
+  prepare-validate helper across scalar/NEON bindings.
+- `sparselab/ops.py` — `_SpMMFunction.backward` now dispatches dW to
+  `spmm_grad_w_simd` when `ctx.kernel in {"auto", "simd"}`. Public
+  API unchanged — `SparseLinear(kernel="auto")` is still the default.
+- `tests/test_spmm_grad.py` — all 15 oracle tests parametrized over
+  both kernels via a `kernel_fn` fixture (46 test cases).
+- `tests/test_spmm_autograd.py` — new `gradcheck` case explicitly
+  parametrized over scalar + simd dispatch.
+- Full test suite: **442 passed, 2 skipped** (was 376 pre-milestone).
+
+### Research artifacts (not launch demos)
+- `examples/demo_18_global_skip_mnist.py` — 4-model MNIST MLP
+  comparison of sparse-sequential vs sparse-global-skip at matched
+  live-param budget. Null result: global-skip did not beat sparse-
+  sequential on this workload.
+- `examples/demo_20_global_skip_transformer.py` — transformer FFN
+  global-skip at demo 16's 40M-param shape. Three near-bias settings
+  (uniform, stratified 0.5, stratified 0.8) all within 0.003 nats of
+  each other at 1000 steps — connection distribution pattern does
+  not meaningfully affect outcome at this scale.
+
 ## [0.2.0] — 2026-04-23
 
 **Renamed from `sparsecore` to `sparselab`.** No functional code changes.
