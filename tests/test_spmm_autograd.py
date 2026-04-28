@@ -108,6 +108,68 @@ def test_gradcheck_dX(M, K, N, sparsity):
 
 
 # ─────────────────────────────────────────────────────────────────────
+#  C3 — gradcheck with explicit kernel dispatch (NEON vs scalar)
+#
+#  The test_gradcheck_dX above uses sparselab.spmm()'s default
+#  kernel="auto" routing, which after Phase D of issue #1 exercises
+#  the NEON dW kernel on ARM64. This test pins the two kernel values
+#  explicitly so a future default change can't silently leave the
+#  NEON autograd path uncovered. Parametrized over both scalar and
+#  simd — each must pass the same finite-differences check.
+# ─────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("kernel", ["scalar", "simd"])
+def test_gradcheck_dW_values_per_kernel(kernel):
+    """
+    gradcheck on W_values specifically, routed through each kernel.
+    Verifies our Phase D dispatch in _SpMMFunction.backward correctly
+    picks up the chosen kernel for dW computation.
+    """
+    # Smaller shape than the dX test — gradcheck scales O(param_count)
+    # and W_values has nnz params vs X's K*N. 4x5 @ 3 at 50% sparsity
+    # keeps the finite-diff sweep tractable while covering both live
+    # and padding slots.
+    M, K, N, sparsity = 4, 5, 3, 0.5
+
+    torch.manual_seed(42)
+    W_dense = torch.randn(M, K, dtype=torch.float64) * (
+        torch.rand(M, K) >= sparsity
+    ).double()
+    W_csr = PaddedCSR.from_dense(W_dense.float())
+
+    # W_values tracks gradients for this test; X does not. Tests the
+    # dW code path in isolation.
+    W_values_t = torch.from_numpy(np.array(W_csr.values, copy=True)).double()
+    W_values_t.requires_grad_(True)
+
+    X = torch.randn(K, N, dtype=torch.float64)
+    X.requires_grad_(False)
+
+    def fn(wv_double):
+        # The autograd Function needs W_values as a float32 tensor
+        # aliased with the PaddedCSR's internal buffer. Because we're
+        # using float64 gradcheck, copy values back into the CSR then
+        # call apply() directly (bypass the public wrapper, which
+        # would create a separate W_values tensor and break the alias).
+        wv_f32 = wv_double.float().contiguous()
+        # Mutate the CSR's underlying buffer so forward reads these.
+        # Using .numpy() here gives a writable view into the C++ vec.
+        W_csr_values_np = np.asarray(W_csr.values)
+        W_csr_values_np[:] = wv_f32.detach().numpy()
+        # Call the autograd Function with the requested kernel.
+        return _SpMMFunction.apply(wv_f32, W_csr, X.float(), kernel).double()
+
+    # Same loose tolerance as test_gradcheck_dX — our kernel is float32
+    # internally, so finite-diff epsilon hits float32 precision first.
+    assert torch.autograd.gradcheck(
+        fn, (W_values_t,),
+        eps=1e-3, atol=1e-2, rtol=1e-2,
+        check_undefined_grad=False,
+    ), f"gradcheck failed for kernel={kernel}"
+
+
+# ─────────────────────────────────────────────────────────────────────
 #  Group 2 — end-to-end loss.backward() on practical graphs
 # ─────────────────────────────────────────────────────────────────────
 

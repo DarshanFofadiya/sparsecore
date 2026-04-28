@@ -177,7 +177,18 @@ class _SpMMFunction(torch.autograd.Function):
         # ── Gradient w.r.t. W_values ──
         # Per design doc §1.4: one dot product per live slot, output
         # aligned with W.values (length = total_capacity, padding = 0).
-        dW_np = _core.spmm_grad_w(W, dY_f32.numpy(), X_f32.numpy())
+        #
+        # Dispatch: NEON SIMD kernel when the forward was "auto" or
+        # "simd" (the default training path on ARM64), falling back to
+        # the scalar kernel only when forward was explicitly "scalar".
+        # ctx.kernel was stashed in forward() so we match whatever
+        # kernel the forward pass used — no surprise mixing.
+        grad_w_fn = (
+            _core.spmm_grad_w_simd
+            if ctx.kernel in ("auto", "simd")
+            else _core.spmm_grad_w
+        )
+        dW_np = grad_w_fn(W, dY_f32.numpy(), X_f32.numpy())
         dW_values = torch.from_numpy(dW_np)
 
         # ── Gradient w.r.t. X ──
