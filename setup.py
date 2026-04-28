@@ -356,6 +356,7 @@ ext_modules = [
             [
                 "csrc/kernels/vector_dot_neon.cpp",
                 "csrc/kernels/spmm_neon.cpp",
+                "csrc/kernels/spmm_grad_neon.cpp",
             ] if IS_ARM64 else []
         ),
         # Include paths used for `#include "kernels/foo.hpp"` etc.

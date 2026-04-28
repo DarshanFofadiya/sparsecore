@@ -35,6 +35,7 @@
 #if defined(__ARM_NEON)
   #include "kernels/vector_dot_neon.hpp"
   #include "kernels/spmm_neon.hpp"
+  #include "kernels/spmm_grad_neon.hpp"
 #endif
 
 namespace py = pybind11;
@@ -255,9 +256,10 @@ py::array_t<float> py_spmm_simd(
 
 
 // ─────────────────────────────────────────────────────────────────────────
-//  Python wrapper: spmm_grad_w
+//  Python wrapper: spmm_grad_w (scalar) / spmm_grad_w_simd (NEON)
 //
-//  Compute dL/dW at live slots of W (milestone 4a-iv).
+//  Compute dL/dW at live slots of W (milestone 4a-iv, plus milestone 12's
+//  NEON variant — issue #1).
 //
 //  Takes three inputs:
 //    W   — sparse weight (we only read its index arrays, not values)
@@ -271,29 +273,49 @@ py::array_t<float> py_spmm_simd(
 //  can do W.values -= lr * dW as a single vectorized subtraction
 //  without needing any slot-index mapping.
 //
+//  Both scalar and NEON variants have identical input/output shapes, so
+//  we factor validation + output-allocation into a shared helper and
+//  have two thin wrappers that just pick which kernel to call. Same
+//  pattern as the spmm scalar/simd pair above.
+//
 //  Shape checks:
 //    - dY and X must both be 2-D
 //    - dY.shape[0] must equal W.nrows
 //    - X.shape[0] must equal W.ncols
 //    - dY.shape[1] must equal X.shape[1] (the shared "N" dim)
 // ─────────────────────────────────────────────────────────────────────────
-py::array_t<float> py_spmm_grad_w(
+namespace {
+
+// Shared setup: validates inputs and allocates the dW output. Returns
+// the three raw pointers / shapes the kernel needs; the caller picks
+// which kernel to invoke.
+struct SpmmGradWPlan {
+    py::array_t<float> dW;
+    const float* dY_ptr;
+    const float* X_ptr;
+    float* dW_ptr;
+    int64_t N;
+    int64_t K;
+};
+
+SpmmGradWPlan prepare_spmm_grad_w(
     const sparselab::PaddedCSR& W,
-    py::array_t<float, py::array::c_style | py::array::forcecast> dY,
-    py::array_t<float, py::array::c_style | py::array::forcecast> X
+    const py::array_t<float, py::array::c_style | py::array::forcecast>& dY,
+    const py::array_t<float, py::array::c_style | py::array::forcecast>& X,
+    const char* kernel_name
 ) {
     py::buffer_info dy_info = dY.request();
     py::buffer_info x_info = X.request();
 
     if (dy_info.ndim != 2) {
         throw std::invalid_argument(
-            "spmm_grad_w: dY must be 2-D, got ndim=" +
+            std::string(kernel_name) + ": dY must be 2-D, got ndim=" +
             std::to_string(dy_info.ndim) + "."
         );
     }
     if (x_info.ndim != 2) {
         throw std::invalid_argument(
-            "spmm_grad_w: X must be 2-D, got ndim=" +
+            std::string(kernel_name) + ": X must be 2-D, got ndim=" +
             std::to_string(x_info.ndim) + "."
         );
     }
@@ -305,21 +327,21 @@ py::array_t<float> py_spmm_grad_w(
 
     if (M_dy != W.nrows) {
         throw std::invalid_argument(
-            "spmm_grad_w: dY.shape[0]=" + std::to_string(M_dy) +
+            std::string(kernel_name) + ": dY.shape[0]=" + std::to_string(M_dy) +
             " but W.nrows=" + std::to_string(W.nrows) +
             ". dY must have the same row count as W."
         );
     }
     if (K_x != W.ncols) {
         throw std::invalid_argument(
-            "spmm_grad_w: X.shape[0]=" + std::to_string(K_x) +
+            std::string(kernel_name) + ": X.shape[0]=" + std::to_string(K_x) +
             " but W.ncols=" + std::to_string(W.ncols) +
             ". X must have the same row count as W has columns."
         );
     }
     if (N_dy != N_x) {
         throw std::invalid_argument(
-            "spmm_grad_w: dY.shape[1]=" + std::to_string(N_dy) +
+            std::string(kernel_name) + ": dY.shape[1]=" + std::to_string(N_dy) +
             " must equal X.shape[1]=" + std::to_string(N_x) +
             " (shared inner dim N)."
         );
@@ -332,13 +354,50 @@ py::array_t<float> py_spmm_grad_w(
     auto dW = py::array_t<float>({static_cast<py::ssize_t>(cap)});
     py::buffer_info dw_info = dW.request();
 
-    const float* dY_ptr = static_cast<const float*>(dy_info.ptr);
-    const float* X_ptr = static_cast<const float*>(x_info.ptr);
-    float* dW_ptr = static_cast<float*>(dw_info.ptr);
+    SpmmGradWPlan plan;
+    plan.dW = dW;
+    plan.dY_ptr = static_cast<const float*>(dy_info.ptr);
+    plan.X_ptr = static_cast<const float*>(x_info.ptr);
+    plan.dW_ptr = static_cast<float*>(dw_info.ptr);
+    plan.N = N_dy;
+    plan.K = K_x;
+    return plan;
+}
 
-    sparselab::spmm_grad_w(W, dY_ptr, N_dy, X_ptr, K_x, dW_ptr);
+}  // anonymous namespace
 
-    return dW;
+
+py::array_t<float> py_spmm_grad_w(
+    const sparselab::PaddedCSR& W,
+    py::array_t<float, py::array::c_style | py::array::forcecast> dY,
+    py::array_t<float, py::array::c_style | py::array::forcecast> X
+) {
+    auto plan = prepare_spmm_grad_w(W, dY, X, "spmm_grad_w");
+    sparselab::spmm_grad_w(W, plan.dY_ptr, plan.N, plan.X_ptr, plan.K,
+                           plan.dW_ptr);
+    return plan.dW;
+}
+
+
+// NEON-variant wrapper. On ARM64 calls the SIMD kernel; on x86 the
+// _simd symbol falls back to the scalar kernel so Python callers get
+// consistent behavior regardless of platform. Same fallback pattern
+// as py_spmm_simd and py_vector_dot_simd above.
+py::array_t<float> py_spmm_grad_w_simd(
+    const sparselab::PaddedCSR& W,
+    py::array_t<float, py::array::c_style | py::array::forcecast> dY,
+    py::array_t<float, py::array::c_style | py::array::forcecast> X
+) {
+    auto plan = prepare_spmm_grad_w(W, dY, X, "spmm_grad_w_simd");
+#if defined(__ARM_NEON)
+    sparselab::spmm_grad_w_simd(W, plan.dY_ptr, plan.N, plan.X_ptr, plan.K,
+                                plan.dW_ptr);
+#else
+    // Non-ARM fallback: scalar kernel. See py_spmm_simd rationale.
+    sparselab::spmm_grad_w(W, plan.dY_ptr, plan.N, plan.X_ptr, plan.K,
+                           plan.dW_ptr);
+#endif
+    return plan.dW;
 }
 
 
@@ -434,6 +493,13 @@ PYBIND11_MODULE(_core, m) {
           "(M, N) and forward input X (K, N), returns a 1-D float32 array "
           "of length W.nnz() aligned with W.values. The dense-simulated "
           "anti-pattern materializes a full (M, K) gradient; we do not.");
+
+    m.def("spmm_grad_w_simd", &py_spmm_grad_w_simd,
+          "NEON SIMD version of spmm_grad_w. Same contract as the scalar "
+          "version; the inner dot-product loop is vectorized 8-wide with "
+          "two independent NEON FMA accumulators. Numerically agrees with "
+          "spmm_grad_w within rtol=atol=1e-5. On x86 this symbol falls "
+          "back to the scalar kernel so the public API stays stable.");
 
     m.def("dense_grad", &py_dense_grad,
           "Compute the FULL dense gradient G = dY @ X^T. Shape (M, K) "

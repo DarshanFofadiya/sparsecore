@@ -123,6 +123,30 @@ def time_scalar_dw(W_csr: PaddedCSR, dY: np.ndarray, X: np.ndarray) -> float:
     return stats.median(samples)
 
 
+def time_simd_dw(W_csr: PaddedCSR, dY: np.ndarray, X: np.ndarray) -> float:
+    """Median wallclock for one spmm_grad_w_simd call, in milliseconds.
+
+    Currently (Phase A) this kernel is a scalar-identical stub — results
+    are expected to match scalar within ±5% run-to-run noise. The
+    Phase-A sanity gate is: if this column diverges from scalar by more
+    than that, the dispatch/build plumbing is broken and we must
+    investigate before adding NEON intrinsics in Phase B.
+
+    After Phase B replaces the inner dot loop with NEON intrinsics,
+    this column will show the real 3-5x speedup target per
+    .kiro/specs/dw-neon-kernel/design.md §6.1.
+    """
+    for _ in range(N_WARMUP):
+        _core.spmm_grad_w_simd(W_csr, dY, X)
+
+    samples = []
+    for _ in range(N_RUNS):
+        t0 = time.perf_counter()
+        _core.spmm_grad_w_simd(W_csr, dY, X)
+        samples.append((time.perf_counter() - t0) * 1000.0)
+    return stats.median(samples)
+
+
 def time_dense_oracle(W_dense: torch.Tensor, dY_np: np.ndarray, X_np: np.ndarray) -> float:
     """Median wallclock for the dense-BLAS oracle of the same math.
 
@@ -176,36 +200,40 @@ def format_gflops(flops: int, ms: float) -> str:
 def main():
     print("SparseLab — dW kernel baseline measurement")
     print("(Gate 1 for GitHub issue #1: NEON dW kernel)")
-    print("=" * 90)
+    print("=" * 96)
     print(f"Torch threads: {torch.get_num_threads()}   "
           f"Runs: {N_RUNS} (median)   Warmup: {N_WARMUP}")
     print()
-    print(f"{'Shape':<55} {'scalar':>8} {'dense':>8} {'ratio':>7} "
-          f"{'s.GF/s':>8} {'d.GF/s':>8}")
-    print(f"{'':<55} {'(ms)':>8} {'(ms)':>8} {'s/d':>7} "
-          f"{'':>8} {'':>8}")
-    print("-" * 90)
+    print(f"{'Shape':<55} {'scalar':>8} {'simd':>8} {'dense':>8} "
+          f"{'si/sc':>7} {'s.GF/s':>8}")
+    print(f"{'':<55} {'(ms)':>8} {'(ms)':>8} {'(ms)':>8} "
+          f"{'':>7} {'':>8}")
+    print("-" * 96)
 
     for M, K, N, s, label in SHAPES:
         W_csr, W_dense, dY, X = make_inputs(M, K, N, s)
 
         t_scalar = time_scalar_dw(W_csr, dY, X)
+        t_simd   = time_simd_dw(W_csr, dY, X)
         t_dense  = time_dense_oracle(W_dense, dY, X)
-        ratio = t_scalar / t_dense if t_dense > 0 else float("inf")
+        si_over_sc = t_simd / t_scalar if t_scalar > 0 else float("inf")
 
         nnz = W_csr.nnz
         flops = compute_flops(M, K, N, nnz)
-        # The dense oracle does M*K*N FMAs (full dense matmul).
-        dense_flops = 2 * M * K * N
 
-        print(f"{label:<55} {t_scalar:>8.2f} {t_dense:>8.2f} "
-              f"{ratio:>6.2f}x "
-              f"{format_gflops(flops, t_scalar):>8} "
-              f"{format_gflops(dense_flops, t_dense):>8}")
+        print(f"{label:<55} {t_scalar:>8.2f} {t_simd:>8.2f} {t_dense:>8.2f} "
+              f"{si_over_sc:>6.2f}x "
+              f"{format_gflops(flops, t_scalar):>8}")
 
-    print("=" * 90)
+    print("=" * 96)
     print()
     print("How to interpret these numbers:")
+    print()
+    print("  simd/scalar ratio (si/sc):")
+    print("    - Phase A (stub): should be 0.95-1.05 (scalar-identical).")
+    print("      Any wider divergence means dispatch plumbing is broken")
+    print("      and we must investigate before writing NEON intrinsics.")
+    print("    - Phase B (real NEON): target 0.20-0.33 (3-5x speedup).")
     print()
     print("  scalar / dense ratio:")
     print("    How much slower our sparse-aware scalar kernel is than a")
@@ -219,11 +247,6 @@ def main():
     print("      < 30 GF/s  -> scalar / no auto-vec")
     print("      30-80 GF/s -> partial auto-vec, some headroom")
     print("      > 80 GF/s  -> Clang already vectorized well")
-    print()
-    print("  d.GF/s (dense throughput):")
-    print("    torch.matmul on this shape. Upper bound for any dense")
-    print("    path; our sparse kernel does (1 - sparsity) * this work,")
-    print("    so we should be naturally faster at high sparsity.")
     print()
     print("Decision rule for issue #1 (NEON dW kernel):")
     print("  s.GF/s < 40  -> big SIMD headroom, NEON worth writing")

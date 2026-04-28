@@ -46,6 +46,24 @@ def _suppress_known_warnings():
 
 
 # ─────────────────────────────────────────────────────────────────────
+#  Kernel parametrization fixture
+#
+#  Every correctness test runs against BOTH the scalar and NEON SIMD
+#  kernels to guarantee they agree within 1e-5. On x86, _simd routes
+#  to scalar so the parametrization still runs but exercises the same
+#  code path twice — that's cheap and keeps the test file portable.
+# ─────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(params=["scalar", "simd"])
+def kernel_fn(request):
+    """Parametrized dW kernel — resolves to scalar or simd at test time."""
+    if request.param == "scalar":
+        return _core.spmm_grad_w
+    return _core.spmm_grad_w_simd
+
+
+# ─────────────────────────────────────────────────────────────────────
 #  Helper: dense PyTorch backward as oracle
 # ─────────────────────────────────────────────────────────────────────
 
@@ -113,7 +131,7 @@ def _padding_slots(W_csr: PaddedCSR):
         "large_95", "M_1", "K_1", "N_1",
     ],
 )
-def test_spmm_grad_w_matches_dense_autograd(M, K, N, sparsity):
+def test_spmm_grad_w_matches_dense_autograd(M, K, N, sparsity, kernel_fn):
     """For each live slot, our dW_values must match dense autograd's grad."""
     torch.manual_seed(42)
     W_dense = torch.randn(M, K, dtype=torch.float32)
@@ -129,7 +147,7 @@ def test_spmm_grad_w_matches_dense_autograd(M, K, N, sparsity):
     dL_dW_dense = _dense_oracle(W_dense, X, dY)
 
     # Ours: compact gradient at live slots only
-    dW_values = _core.spmm_grad_w(W_csr, dY.numpy(), X.numpy())
+    dW_values = kernel_fn(W_csr, dY.numpy(), X.numpy())
 
     # Shape: must align with W.values
     assert dW_values.shape == (W_csr.total_capacity,), (
@@ -153,7 +171,7 @@ def test_spmm_grad_w_matches_dense_autograd(M, K, N, sparsity):
 # ─────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("padding_ratio", [0.0, 0.2, 0.5, 1.0])
-def test_padding_slots_stay_zero(padding_ratio):
+def test_padding_slots_stay_zero(padding_ratio, kernel_fn):
     """
     Padding slots must stay at exactly 0.0 regardless of padding_ratio.
     If any padding slot contained random junk, W.values -= lr * dW would
@@ -165,7 +183,7 @@ def test_padding_slots_stay_zero(padding_ratio):
     dY = torch.randn(10, 5, dtype=torch.float32)
 
     W_csr = PaddedCSR.from_dense(W_dense, padding_ratio=padding_ratio)
-    dW_values = _core.spmm_grad_w(W_csr, dY.numpy(), X.numpy())
+    dW_values = kernel_fn(W_csr, dY.numpy(), X.numpy())
 
     padding = _padding_slots(W_csr)
     if len(padding) > 0:
@@ -181,26 +199,26 @@ def test_padding_slots_stay_zero(padding_ratio):
 #  Group 3 — edge cases
 # ─────────────────────────────────────────────────────────────────────
 
-def test_empty_W_returns_empty_grad():
+def test_empty_W_returns_empty_grad(kernel_fn):
     """nnz = 0 → dW_values is length total_capacity but all zero."""
     W_csr = PaddedCSR(nrows=8, ncols=16)  # empty ctor → nnz = 0, cap = 0
     X = torch.randn(16, 5, dtype=torch.float32)
     dY = torch.randn(8, 5, dtype=torch.float32)
-    dW_values = _core.spmm_grad_w(W_csr, dY.numpy(), X.numpy())
+    dW_values = kernel_fn(W_csr, dY.numpy(), X.numpy())
     assert dW_values.shape == (0,) or np.all(dW_values == 0.0)
 
 
-def test_all_rows_empty_W():
+def test_all_rows_empty_W(kernel_fn):
     """A W with all zero entries still yields an all-zero gradient."""
     W_dense = torch.zeros(6, 10, dtype=torch.float32)
     W_csr = PaddedCSR.from_dense(W_dense)
     X = torch.randn(10, 4, dtype=torch.float32)
     dY = torch.randn(6, 4, dtype=torch.float32)
-    dW_values = _core.spmm_grad_w(W_csr, dY.numpy(), X.numpy())
+    dW_values = kernel_fn(W_csr, dY.numpy(), X.numpy())
     assert np.all(dW_values == 0.0)
 
 
-def test_single_live_entry():
+def test_single_live_entry(kernel_fn):
     """One live entry at (i=2, c=3): dW_values[slot] = dY[2,:]·X[3,:]."""
     W_dense = torch.zeros(5, 7, dtype=torch.float32)
     W_dense[2, 3] = 1.0  # W[i,c] value itself doesn't matter for grad
@@ -208,14 +226,14 @@ def test_single_live_entry():
     X = torch.randn(7, 4, dtype=torch.float32)
     dY = torch.randn(5, 4, dtype=torch.float32)
 
-    dW_values = _core.spmm_grad_w(W_csr, dY.numpy(), X.numpy())
+    dW_values = kernel_fn(W_csr, dY.numpy(), X.numpy())
     slots, rows, cols = _extract_live_slots(W_csr)
     assert len(slots) == 1
     expected = (dY[2] * X[3]).sum().item()
     assert dW_values[slots[0]] == pytest.approx(expected, rel=1e-5, abs=1e-6)
 
 
-def test_fully_dense_W():
+def test_fully_dense_W(kernel_fn):
     """
     A fully dense W (0% sparsity) still works; every slot has a gradient.
     This is the stress case — every (i, k) pair requires a full dot product.
@@ -227,7 +245,7 @@ def test_fully_dense_W():
     dY = torch.randn(8, 4, dtype=torch.float32)
 
     dL_dW_dense = _dense_oracle(W_dense, X, dY)
-    dW_values = _core.spmm_grad_w(W_csr, dY.numpy(), X.numpy())
+    dW_values = kernel_fn(W_csr, dY.numpy(), X.numpy())
 
     slots, rows, cols = _extract_live_slots(W_csr)
     ours = dW_values[slots]
@@ -239,54 +257,54 @@ def test_fully_dense_W():
 #  Group 4 — error paths
 # ─────────────────────────────────────────────────────────────────────
 
-def test_rejects_1d_dY():
+def test_rejects_1d_dY(kernel_fn):
     W_csr = PaddedCSR.from_dense(torch.randn(4, 4))
     X = torch.randn(4, 2, dtype=torch.float32)
     dY_bad = torch.randn(4, dtype=torch.float32)  # 1-D
     with pytest.raises(ValueError, match="2-D"):
-        _core.spmm_grad_w(W_csr, dY_bad.numpy(), X.numpy())
+        kernel_fn(W_csr, dY_bad.numpy(), X.numpy())
 
 
-def test_rejects_1d_X():
+def test_rejects_1d_X(kernel_fn):
     W_csr = PaddedCSR.from_dense(torch.randn(4, 4))
     dY = torch.randn(4, 2, dtype=torch.float32)
     X_bad = torch.randn(4, dtype=torch.float32)  # 1-D
     with pytest.raises(ValueError, match="2-D"):
-        _core.spmm_grad_w(W_csr, dY.numpy(), X_bad.numpy())
+        kernel_fn(W_csr, dY.numpy(), X_bad.numpy())
 
 
-def test_rejects_dY_row_mismatch():
+def test_rejects_dY_row_mismatch(kernel_fn):
     """dY.shape[0] != W.nrows → error."""
     W_csr = PaddedCSR.from_dense(torch.randn(4, 6))
     dY_bad = torch.randn(5, 3, dtype=torch.float32)  # 5 != 4
     X = torch.randn(6, 3, dtype=torch.float32)
     with pytest.raises(ValueError, match="nrows|dY.shape"):
-        _core.spmm_grad_w(W_csr, dY_bad.numpy(), X.numpy())
+        kernel_fn(W_csr, dY_bad.numpy(), X.numpy())
 
 
-def test_rejects_X_row_mismatch():
+def test_rejects_X_row_mismatch(kernel_fn):
     """X.shape[0] != W.ncols → error."""
     W_csr = PaddedCSR.from_dense(torch.randn(4, 6))
     dY = torch.randn(4, 3, dtype=torch.float32)
     X_bad = torch.randn(7, 3, dtype=torch.float32)  # 7 != 6
     with pytest.raises(ValueError, match="ncols|X.shape"):
-        _core.spmm_grad_w(W_csr, dY.numpy(), X_bad.numpy())
+        kernel_fn(W_csr, dY.numpy(), X_bad.numpy())
 
 
-def test_rejects_N_mismatch():
+def test_rejects_N_mismatch(kernel_fn):
     """dY.shape[1] != X.shape[1] → error."""
     W_csr = PaddedCSR.from_dense(torch.randn(4, 6))
     dY = torch.randn(4, 3, dtype=torch.float32)
     X_bad = torch.randn(6, 5, dtype=torch.float32)  # 5 != 3
     with pytest.raises(ValueError, match="N|inner|shape"):
-        _core.spmm_grad_w(W_csr, dY.numpy(), X_bad.numpy())
+        kernel_fn(W_csr, dY.numpy(), X_bad.numpy())
 
 
 # ─────────────────────────────────────────────────────────────────────
 #  Group 5 — dtype handling
 # ─────────────────────────────────────────────────────────────────────
 
-def test_accepts_float64_inputs():
+def test_accepts_float64_inputs(kernel_fn):
     """float64 dY/X should be silently coerced to float32 (forcecast)."""
     torch.manual_seed(5)
     W_dense = torch.randn(8, 8) * (torch.rand(8, 8) >= 0.5).float()
@@ -294,7 +312,7 @@ def test_accepts_float64_inputs():
     X = torch.randn(8, 4, dtype=torch.float64)
     dY = torch.randn(8, 4, dtype=torch.float64)
 
-    dW_values = _core.spmm_grad_w(W_csr, dY.numpy(), X.numpy())
+    dW_values = kernel_fn(W_csr, dY.numpy(), X.numpy())
     # Should complete without error; correctness tested elsewhere
     assert dW_values.dtype == np.float32
     assert dW_values.shape == (W_csr.total_capacity,)
@@ -304,7 +322,7 @@ def test_accepts_float64_inputs():
 #  Group 6 — determinism + idempotence
 # ─────────────────────────────────────────────────────────────────────
 
-def test_deterministic():
+def test_deterministic(kernel_fn):
     """Same inputs → bit-identical outputs every call."""
     torch.manual_seed(7)
     W_dense = torch.randn(10, 12) * (torch.rand(10, 12) >= 0.5).float()
@@ -312,8 +330,8 @@ def test_deterministic():
     X = torch.randn(12, 6, dtype=torch.float32).numpy()
     dY = torch.randn(10, 6, dtype=torch.float32).numpy()
 
-    g1 = _core.spmm_grad_w(W_csr, dY, X)
-    g2 = _core.spmm_grad_w(W_csr, dY, X)
-    g3 = _core.spmm_grad_w(W_csr, dY, X)
+    g1 = kernel_fn(W_csr, dY, X)
+    g2 = kernel_fn(W_csr, dY, X)
+    g3 = kernel_fn(W_csr, dY, X)
     np.testing.assert_array_equal(g1, g2)
     np.testing.assert_array_equal(g2, g3)
