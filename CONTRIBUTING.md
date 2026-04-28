@@ -81,15 +81,16 @@ before you open a PR saves cycles for everyone:
    fixtures for these sizes — if you're touching a kernel, your test
    needs to hit the same grid.
 
-5. **Don't break the 372-test suite.** `pytest` must still pass
-   after your change.
+5. **Don't break the test suite.** `pytest` must still pass after
+   your change. Current suite: 442 tests (run `pytest tests/ -q` to
+   see the full count on your machine).
 
 6. **Borrow, don't reinvent.** If there's prior art (another
    library's API, an existing paper's algorithm), use it and credit
    it. Before designing a new public API, check the Cerebras,
    torchao, and rigl-torch projects for what's already converged on.
-   Full discussion in `.kiro/steering/borrow-dont-reinvent.md` if
-   you're curious about our reasoning.
+   We prioritize adopting hardened community patterns over inventing
+   new ones — it's how a stable scaffolding library gets built.
 
 7. **Honest numbers.** If your PR claims a speedup, include the
    before/after numbers from a reproducible benchmark in the PR
