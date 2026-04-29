@@ -75,6 +75,16 @@ jobs:
         # --no-build-isolation uses the system Python's torch / pybind11
         # rather than spinning up a clean build environment each time —
         # ~2× faster on CI and matches what contributors do locally.
+        #
+        # ARCHFLAGS on macOS forces a single-arch build. GitHub's
+        # macos-14 runners install a universal2 Python by default,
+        # which would cause pip to try to build extensions for BOTH
+        # arm64 AND x86_64 slices — the x86_64 slice fails because
+        # our NEON sources (guarded by __ARM_NEON) don't compile on
+        # x86. We set ARCHFLAGS=-arch arm64 to build only the native
+        # slice for the Apple Silicon runner.
+        env:
+          ARCHFLAGS: ${{ runner.os == 'macOS' && '-arch arm64' || '' }}
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev] -v
