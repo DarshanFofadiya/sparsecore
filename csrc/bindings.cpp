@@ -45,6 +45,7 @@
   #include "kernels/spmm_grad_neon.hpp"
 #elif defined(__AVX2__) && defined(__FMA__)
   #include "kernels/spmm_grad_avx2.hpp"
+  #include "kernels/spmm_avx2.hpp"
 #endif
 
 namespace py = pybind11;
@@ -256,8 +257,15 @@ py::array_t<float> py_spmm_simd(
     auto plan = prepare_spmm(W, X, "spmm_simd");
 #if defined(__ARM_NEON)
     sparselab::spmm_simd_neon(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
+#elif defined(__AVX2__) && defined(__FMA__)
+    // x86 AVX2 path. Distinct symbol from NEON (spmm_simd_avx2 vs
+    // spmm_simd_neon) — see docs/design/spmm_forward_avx2.md §4.3
+    // for the arch-specific naming rationale. setup.py guarantees
+    // exactly one of the two SIMD forward sources is compiled per
+    // build.
+    sparselab::spmm_simd_avx2(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
 #else
-    // Non-ARM fallback: scalar SpMM. See py_vector_dot_simd rationale.
+    // Non-SIMD fallback: scalar SpMM. See py_vector_dot_simd rationale.
     sparselab::spmm_scalar(W, plan.x_ptr, plan.K, plan.N, plan.y_ptr);
 #endif
     return plan.Y;

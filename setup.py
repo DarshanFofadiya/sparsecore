@@ -377,18 +377,21 @@ ext_modules = [
         # be compiled — their #include <arm_neon.h> fails and they
         # self-guard with an #error.
         #
-        # AVX2 sources (spmm_grad_avx2.cpp) are gated on IS_X86_64. On
-        # non-x86 they can't be compiled — their #include <immintrin.h>
-        # is missing AVX2 intrinsic declarations without -march=x86-64-v3,
-        # and they self-guard with an #error.
+        # AVX2 sources (spmm_grad_avx2.cpp, spmm_avx2.cpp) are gated
+        # on IS_X86_64. On non-x86 they can't be compiled — their
+        # #include <immintrin.h> is missing AVX2 intrinsic declarations
+        # without -march=x86-64-v3, and they self-guard with an #error.
         #
         # The two branches are MUTUALLY EXCLUSIVE: at no point does a
         # single build compile both NEON and AVX2 sources. Both SIMD
-        # kernel files define the same C++ symbol name
+        # backward kernel files define the same C++ symbol name
         # (sparselab::spmm_grad_w_simd) so the bindings layer in
         # bindings.cpp calls the right function automatically — which
         # file defines that symbol depends on which branch the setup
-        # took.
+        # took. The forward SIMD kernels use arch-specific symbols
+        # (spmm_simd_neon on ARM, spmm_simd_avx2 on x86) dispatched by
+        # an #if/#elif in bindings.cpp — see docs/design/spmm_forward_avx2.md
+        # §4.3 for the naming-convention rationale.
         sources=[
             "csrc/bindings.cpp",
             "csrc/kernels/double_tensor.cpp",
@@ -406,6 +409,7 @@ ext_modules = [
         ) + (
             [
                 "csrc/kernels/spmm_grad_avx2.cpp",
+                "csrc/kernels/spmm_avx2.cpp",
             ] if IS_X86_64 else []
         ),
         # Include paths used for `#include "kernels/foo.hpp"` etc.
