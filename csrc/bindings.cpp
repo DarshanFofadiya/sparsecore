@@ -27,15 +27,24 @@
 #include "kernels/spmm_grad.hpp"
 #include "kernels/dense_grad.hpp"
 
-// NEON sources are ARM64-only. On x86 we skip including the NEON headers
-// (they'd pull in <arm_neon.h>) and wire the "_simd" Python wrappers to
-// fall back to the scalar kernels. The public API stays identical — users
-// can still pass kernel="simd" from Python, they just get the scalar
-// kernel underneath on non-ARM hardware.
+// NEON sources are ARM64-only. AVX2 sources are x86_64-only. On
+// either platform we include the right SIMD headers so the `_simd`
+// Python wrappers can dispatch to a hand-written kernel. On any
+// other platform (or builds without AVX2 on x86, though our setup.py
+// mandates -march=x86-64-v3 so this is unreachable in practice), the
+// wrappers fall back to the scalar kernels. The public Python API
+// stays identical across platforms — users can always pass
+// kernel="simd", it just reaches whichever fast path is available.
+//
+// See docs/design/spmm_backward_neon.md (ARM path) and
+// docs/design/spmm_backward_avx2.md (x86 path) for the full
+// rationale and measured speedup numbers.
 #if defined(__ARM_NEON)
   #include "kernels/vector_dot_neon.hpp"
   #include "kernels/spmm_neon.hpp"
   #include "kernels/spmm_grad_neon.hpp"
+#elif defined(__AVX2__) && defined(__FMA__)
+  #include "kernels/spmm_grad_avx2.hpp"
 #endif
 
 namespace py = pybind11;
@@ -379,10 +388,17 @@ py::array_t<float> py_spmm_grad_w(
 }
 
 
-// NEON-variant wrapper. On ARM64 calls the SIMD kernel; on x86 the
-// _simd symbol falls back to the scalar kernel so Python callers get
-// consistent behavior regardless of platform. Same fallback pattern
-// as py_spmm_simd and py_vector_dot_simd above.
+// SIMD wrapper for spmm_grad_w.
+//   - On ARM64 (Apple Silicon, Linux aarch64): calls the NEON kernel
+//     defined in spmm_grad_neon.cpp.
+//   - On x86_64 (Linux, requires -march=x86-64-v3): calls the AVX2
+//     kernel defined in spmm_grad_avx2.cpp. Both SIMD kernels
+//     implement the same C++ symbol name (sparselab::spmm_grad_w_simd)
+//     and setup.py guarantees at most one of them is compiled per
+//     build.
+//   - Any other platform: falls back to the scalar kernel so Python
+//     callers get consistent behavior regardless of hardware.
+// Same fallback pattern as py_spmm_simd and py_vector_dot_simd above.
 py::array_t<float> py_spmm_grad_w_simd(
     const sparselab::PaddedCSR& W,
     py::array_t<float, py::array::c_style | py::array::forcecast> dY,
@@ -392,8 +408,14 @@ py::array_t<float> py_spmm_grad_w_simd(
 #if defined(__ARM_NEON)
     sparselab::spmm_grad_w_simd(W, plan.dY_ptr, plan.N, plan.X_ptr, plan.K,
                                 plan.dW_ptr);
+#elif defined(__AVX2__) && defined(__FMA__)
+    // Same C++ symbol name as the NEON version; setup.py ensured
+    // the x86 source (spmm_grad_avx2.cpp) was compiled instead.
+    sparselab::spmm_grad_w_simd(W, plan.dY_ptr, plan.N, plan.X_ptr, plan.K,
+                                plan.dW_ptr);
 #else
-    // Non-ARM fallback: scalar kernel. See py_spmm_simd rationale.
+    // No SIMD kernel available for this target: fall back to scalar.
+    // See py_spmm_simd rationale.
     sparselab::spmm_grad_w(W, plan.dY_ptr, plan.N, plan.X_ptr, plan.K,
                            plan.dW_ptr);
 #endif

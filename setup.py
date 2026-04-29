@@ -372,11 +372,23 @@ ext_modules = [
         # All C++ sources that need to be compiled and linked together.
         # Kernels go in csrc/kernels/*; bindings.cpp is the pybind11 entry point.
         #
-        # NEON sources (spmm_neon.cpp, vector_dot_neon.cpp) are gated on
-        # IS_ARM64. On x86 they can't be compiled — their #include
-        # <arm_neon.h> fails and they self-guard with an #error. The
-        # bindings layer expects the NEON symbols to exist on ARM64 and
-        # to NOT exist on x86; the C++ side handles dispatch correctly.
+        # NEON sources (spmm_neon.cpp, vector_dot_neon.cpp,
+        # spmm_grad_neon.cpp) are gated on IS_ARM64. On x86 they can't
+        # be compiled — their #include <arm_neon.h> fails and they
+        # self-guard with an #error.
+        #
+        # AVX2 sources (spmm_grad_avx2.cpp) are gated on IS_X86_64. On
+        # non-x86 they can't be compiled — their #include <immintrin.h>
+        # is missing AVX2 intrinsic declarations without -march=x86-64-v3,
+        # and they self-guard with an #error.
+        #
+        # The two branches are MUTUALLY EXCLUSIVE: at no point does a
+        # single build compile both NEON and AVX2 sources. Both SIMD
+        # kernel files define the same C++ symbol name
+        # (sparselab::spmm_grad_w_simd) so the bindings layer in
+        # bindings.cpp calls the right function automatically — which
+        # file defines that symbol depends on which branch the setup
+        # took.
         sources=[
             "csrc/bindings.cpp",
             "csrc/kernels/double_tensor.cpp",
@@ -391,6 +403,10 @@ ext_modules = [
                 "csrc/kernels/spmm_neon.cpp",
                 "csrc/kernels/spmm_grad_neon.cpp",
             ] if IS_ARM64 else []
+        ) + (
+            [
+                "csrc/kernels/spmm_grad_avx2.cpp",
+            ] if IS_X86_64 else []
         ),
         # Include paths used for `#include "kernels/foo.hpp"` etc.
         # OpenMP includes are appended by configure_openmp() above.
