@@ -1,0 +1,122 @@
+# Milestone 14 "before" baseline — 40M transformer end-to-end on Linux x86_64.
+#
+# What this workflow does
+# ───────────────────────
+# Runs examples/validate_40m_dw.py on a Linux x86_64 runner. At the
+# current HEAD (post-Phase-A stubs, pre-AVX2 kernel body) the simd
+# path on x86_64 is scalar-identical to the scalar path. The two runs
+# will therefore produce near-matching wallclocks and identical val
+# losses.
+#
+# The wallclock of each 200-step run is the "before" anchor for
+# milestone 14: when the AVX2 Phase-B kernel lands, rerunning this
+# same workflow should show the simd row drop by >= 1.5x while the
+# scalar row stays flat. That drop, captured on the same CI runner
+# class, is the headline milestone-14 number.
+#
+# Why a dedicated workflow
+# ────────────────────────
+# Could piggyback on profile_x86_baseline.yml, but that workflow
+# measures per-layer GFLOPS, not end-to-end transformer training. They
+# answer different questions:
+#   - profile_x86_baseline.yml → "how fast is one dW call?"
+#   - validate_40m_scalar.yml  → "how fast is a full training step?"
+#
+# Per milestone 12, the per-layer win diluted to roughly half at
+# transformer scale (6.5x → 1.96x end-to-end on ARM). We want the
+# x86 equivalent on record before investing Phase-B effort.
+#
+# How to trigger
+# ──────────────
+#   GitHub Actions → "Validate 40M scalar baseline" → Run workflow
+#
+# Manual dispatch only. This takes ~20 min of runner time (two 200-
+# step training runs at 40M scale) and is not something we want on
+# every push. Fire it when:
+#   1. before Phase B starts (milestone 14 "before" anchor) ← now
+#   2. after  Phase B lands (milestone 14 "after" anchor)
+#
+# Output
+# ──────
+# The artifact `validate-40m-x86_64` contains the full stdout, which
+# includes the formatted RESULTS table with ms/step and val-loss
+# columns for both scalar and simd kernels. Archive this into
+# .scratch/ for milestone-14 tracking.
+
+name: Validate 40M scalar baseline
+
+on:
+  workflow_dispatch:   # manual only — long-running diagnostic
+
+jobs:
+  validate:
+    name: 40M end-to-end / Linux-x86_64
+    runs-on: ubuntu-24.04
+    # 40 min cap. A run is ~8-10 min per path × 2 paths = ~20 min
+    # plus install/compile (~4 min), so 40 gives comfortable headroom
+    # without being so generous that a hung run wastes an hour.
+    timeout-minutes: 40
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Capture CPU info
+        # Same minimal dump as profile_x86_baseline.yml so the
+        # artifact is interpretable on its own without consulting
+        # a sibling workflow run. The GFLOPS numbers from the
+        # validate script only make sense if we know whether we're
+        # reading Zen 4 or Sapphire Rapids.
+        run: |
+          echo "=== CPU model ==="
+          grep -m1 "model name" /proc/cpuinfo || echo "no model name"
+          echo
+          echo "=== CPU count ==="
+          nproc
+          echo
+          echo "=== SIMD flags ==="
+          grep -m1 "flags" /proc/cpuinfo || echo "no flags field"
+          echo
+          echo "=== Memory ==="
+          free -m | head -n 3
+
+      - name: Install SparseLab from source
+        # Editable install is fine here — we're measuring the code at
+        # HEAD, not a released wheel. -v because pip wheel compile
+        # logs help diagnose any IS_X86_64 / AVX2 dispatch regressions
+        # from the setup.py.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . -v
+
+      - name: Verify install + kernel dispatch
+        # Sanity-check the forced-kernel mechanism the validate script
+        # relies on. If _SpMMFunction isn't importable or the simd
+        # binding is missing, the rest of the workflow is meaningless.
+        run: |
+          python -c "
+          import sparselab
+          from sparselab import _core
+          from sparselab.ops import _SpMMFunction
+          print(f'sparselab version: {sparselab.__version__}')
+          print(f'spmm_grad_w     : {_core.spmm_grad_w}')
+          print(f'spmm_grad_w_simd: {_core.spmm_grad_w_simd}')
+          print(f'_SpMMFunction   : {_SpMMFunction}')
+          "
+
+      - name: Run 40M validation
+        # Two 200-step training runs (scalar and simd). On x86_64
+        # pre-AVX2 these should produce identical val losses and
+        # near-identical wallclocks. That's the pre-Phase-B baseline.
+        run: |
+          python examples/validate_40m_dw.py 2>&1 | tee /tmp/validate_40m.txt
+
+      - name: Upload validation output
+        uses: actions/upload-artifact@v4
+        with:
+          name: validate-40m-x86_64
+          path: /tmp/validate_40m.txt
