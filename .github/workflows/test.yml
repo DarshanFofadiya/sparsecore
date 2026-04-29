@@ -116,4 +116,17 @@ jobs:
           "
 
       - name: Run pytest
+        # KMP_DUPLICATE_LIB_OK on macOS: the macos-14 CI editable
+        # install loads two libomp.dylib copies into the process
+        # (torch's bundled one + our extension's rpath lookup),
+        # which aborts OpenMP at startup with "OMP: Error #15".
+        # Setting this to TRUE tells libomp to proceed anyway.
+        #
+        # Tracked in issue #18. Not a user-facing problem — our
+        # published PyPI wheels go through scripts/repair_wheel_macos.sh
+        # which uses relative @loader_path rpaths and doesn't hit
+        # this. Only the editable-install CI path on macos-14 is
+        # affected.
+        env:
+          KMP_DUPLICATE_LIB_OK: ${{ runner.os == 'macOS' && 'TRUE' || '' }}
         run: pytest tests/ -v --tb=short
