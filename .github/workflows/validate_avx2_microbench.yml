@@ -1,0 +1,107 @@
+# Gate A0 validation — AVX2 dot-loop microbenchmark on x86_64.
+#
+# What this workflow does
+# ───────────────────────
+# Compiles csrc/bench/avx2_dot_microbench.cpp standalone (no Python,
+# no pybind11, no PaddedCSR) with -march=x86-64-v3 and runs it on
+# GitHub's ubuntu-24.04 x86 runner. The benchmark reports GF/s for:
+#
+#   1. scalar dot loop (Clang auto-vectorized under -march=x86-64-v3)
+#   2. AVX2 single-accumulator (what the avx2-dw-kernel spec proposes)
+#   3. AVX2 dual-accumulator (§3.3 single-vs-dual design decision)
+#
+# Why this matters (see spec §3.3 and "validation" conversation):
+#   Before committing a week of C++ work to write the full AVX2 dW
+#   kernel, we want empirical evidence that (a) AVX2 delivers the
+#   projected throughput on Zen 4 and (b) the single-vs-dual
+#   accumulator decision is empirically sound. If the microbench
+#   surprises us, we re-plan the kernel before writing it.
+#
+#   Analog of Gate 1 for the NEON spec (milestone 12 §6.0) but done
+#   on CI because we don't have local x86 hardware.
+#
+# How to trigger
+# ──────────────
+#   Manual via GitHub Actions → "Validate AVX2 microbench" → Run
+#   workflow. No automatic trigger — this is a one-shot diagnostic
+#   run before spec implementation starts.
+#
+# Reading the output
+# ──────────────────
+# The artifact `avx2-microbench-output` contains stdout from the
+# binary. Look for:
+#   - avx2_single GF/s vs scalar GF/s: the "will AVX2 actually win
+#     on x86" question
+#   - dual/single ratio: the §3.3 decision
+#   - "Design gate" line at the bottom: pass/fail verdict
+#
+# We only run x86_64 here. aarch64 doesn't have AVX2, and the NEON
+# equivalent has already been validated via shipped kernels. Running
+# the ARM row would be meaningless (the binary wouldn't compile).
+
+name: Validate AVX2 microbench
+
+on:
+  workflow_dispatch:    # manual trigger only — one-shot validation
+
+jobs:
+  microbench:
+    name: AVX2 microbench on Linux-x86_64
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Capture CPU info
+        # Duplicated from profile_x86_baseline.yml so the microbench
+        # output can be interpreted standalone without cross-referencing
+        # another workflow's artifacts. Same data, local context.
+        run: |
+          echo "=== CPU model ==="
+          grep -m1 "model name" /proc/cpuinfo || echo "no model name"
+          echo
+          echo "=== CPU count ==="
+          nproc
+          echo
+          echo "=== SIMD flags (first core) ==="
+          grep -m1 "flags" /proc/cpuinfo || echo "no flags field"
+          echo
+
+      - name: Compile microbench
+        # -O3 because we're measuring what the shipped code will do,
+        # not debug builds. -march=x86-64-v3 is the spec's proposed
+        # flag — same one we'll add to setup.py if Gate A0 passes.
+        # -fno-math-errno is safe for our numeric code and slightly
+        # helps vectorization on scalar paths. -Wall -Wextra to catch
+        # any obvious typos (we already ran getDiagnostics locally
+        # but this is belt-and-suspenders for CI).
+        run: |
+          set -x
+          clang++ --version
+          clang++ -O3 -std=c++17 -Wall -Wextra \
+              -march=x86-64-v3 -fno-math-errno \
+              csrc/bench/avx2_dot_microbench.cpp \
+              -o /tmp/microbench
+          file /tmp/microbench
+          # Confirm AVX2 instructions actually landed in the binary.
+          # If this grep returns zero hits, the compile succeeded but
+          # emitted only scalar — the -march flag probably didn't take
+          # effect and we'd get meaningless numbers.
+          echo "=== AVX2 instruction count in binary ==="
+          objdump -d /tmp/microbench | grep -cE "vfmadd[0-9]+ps" || true
+          echo "(any number > 50 means AVX2 FMA landed correctly)"
+
+      - name: Run microbench
+        # Single run. The binary does its own median-of-10 internally
+        # so we don't need to re-run it here. If the run itself is
+        # flaky between CI invocations that's a separate concern
+        # (stable CPU frequency on shared runners, which is GitHub's
+        # problem, not ours).
+        run: |
+          /tmp/microbench 2>&1 | tee /tmp/microbench_output.txt
+
+      - name: Upload microbench output
+        uses: actions/upload-artifact@v4
+        with:
+          name: avx2-microbench-output
+          path: /tmp/microbench_output.txt
