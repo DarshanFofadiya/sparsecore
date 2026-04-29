@@ -7,6 +7,84 @@ Versioning: [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+**AVX2 SIMD kernel for `dW` on Linux x86_64 — closes the Linux-parity
+gap from milestone 13. Sparse-from-scratch training on x86 is now
+**~3× faster end-to-end** at 40M-param transformer scale (per-step
+wallclock 4316 → 1436 ms on a free GitHub Actions Zen 4 runner). Per
+FFN layer the dW kernel itself is 12-13× faster than scalar. Training
+dynamics unchanged — same seed produces identical val loss to four
+decimal places.**
+
+Closes #2.
+
+### Added
+- AVX2 + FMA implementation of `spmm_grad_w` for x86_64 builds.
+  Mirrors the dual-accumulator pattern from `spmm_grad_neon.cpp`,
+  adapted to 256-bit lanes (16 floats/iter Phase A, 8 floats/iter
+  Phase B, scalar 0-7 Phase C, 3-step horizontal reduction). Gate A0
+  microbench on the CI runner confirmed dual-accumulator beats
+  single-accumulator by 2.03× on Zen 4 before the kernel was written.
+  Per-layer measured speedup: 12.7× / 12.7× / 11.8× / 12.9× on the
+  four canonical FFN shapes from demo_15 / demo_16, delivering ~47-51
+  GF/s sustained — within the design's 40-45 GF/s target band.
+- `csrc/kernels/spmm_grad_avx2.{hpp,cpp}` — new AVX2 kernel, compile-
+  gated on `__AVX2__ && __FMA__`.
+- `csrc/bench/avx2_dot_microbench.cpp` — standalone Gate A0
+  microbenchmark for single-vs-dual accumulator validation.
+- `.github/workflows/validate_avx2_microbench.yml` — runs Gate A0
+  microbench on the CI runner (~9 seconds, manual dispatch).
+- `.github/workflows/validate_40m_scalar.yml` — runs the end-to-end
+  40M-transformer before/after comparison (~30 minutes, manual
+  dispatch). Used to capture milestone 14's headline 3× ratio.
+- `examples/validate_40m_dw.py` — the script that workflow drives.
+  Monkey-patches `_SpMMFunction.forward` to force the kernel choice
+  on a full 200-step training run, then reports the scalar-vs-simd
+  wallclock ratio and val-loss delta.
+- `tests/test_spmm_grad_avx2.py` — 44 AVX2-specific tests targeting
+  every Phase A/B/C boundary (N mod 16 residues 1-65), random-shape
+  agreement with scalar, empty-row interleaving, single-slot-per-row,
+  determinism under OpenMP. Skipped on non-x86_64 platforms via
+  `pytest.mark.skipif`.
+- `docs/design/spmm_backward_avx2.md` — committable design doc for
+  the AVX2 kernel, including the Gate A0 measured numbers that
+  revised the spec from single-accumulator to dual-accumulator.
+- `docs/demos/milestone_14.md` — measured 3.0× end-to-end speedup,
+  12-13× per-layer, val-loss delta = 0.0000 nats across 200 SGD
+  steps.
+
+### Changed
+- `setup.py` on x86_64 builds now compiles with `-march=x86-64-v3`.
+  That target implies AVX2 + FMA + BMI2 and has been the Linux
+  Foundation baseline for "modern x86" since ~2021. Standalone (pre
+  the new kernel) this flag alone raised scalar dW from ~3.8 GF/s
+  to ~4.3 GF/s on Zen 4. Full detail in milestone 14's Gate 1.5
+  section.
+- `csrc/bindings.cpp` dispatch for `spmm_grad_w_simd` gained one
+  new `#elif defined(__AVX2__) && defined(__FMA__)` branch to route
+  to the AVX2 kernel on x86. The Python-facing symbol
+  `_core.spmm_grad_w_simd` is unchanged; on ARM64 it still routes
+  to NEON, on pre-AVX2 x86 to scalar.
+- Test suite: 442 → **486 passed** on Linux x86_64 (44 new AVX2
+  tests). On ARM64 stays at 442 passed + 44 skipped (AVX2 tests
+  skip cleanly).
+
+### Breaking
+- **Minimum x86 CPU requirement: Haswell (Intel, 2013+) or Zen 1
+  (AMD, 2017+).** The `-march=x86-64-v3` flag emits AVX2 + FMA
+  instructions; pre-2013 x86 CPUs (Nehalem, Sandy Bridge, Ivy
+  Bridge, Bulldozer) will hit `Illegal instruction` at import. Every
+  Linux distribution currently supported by PyTorch 2.8+ targets
+  Haswell+ / Zen+ CPUs in practice. Users on older hardware can
+  stay on v0.2.1 or build from source with custom flags.
+
+### Internal
+- Platform scope reconfirmed: Apple Silicon macOS, Linux aarch64,
+  Linux x86_64. Intel Mac and Windows remain out of scope. See
+  v0.1.1 for the upstream-PyTorch-deprecation context on Intel Mac.
+- CI Test workflow (`.github/workflows/test.yml`) now exercises
+  the AVX2 kernel on every push. Linux aarch64's NEON numbers
+  verified unchanged vs milestone 13 (si/sc within 5%).
+
 ## [0.2.1] — 2026-04-27
 
 **NEON SIMD kernel for `dW` (sparse weight gradient) — the single
