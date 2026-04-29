@@ -89,9 +89,16 @@ jobs:
         # HEAD, not a released wheel. -v because pip wheel compile
         # logs help diagnose any IS_X86_64 / AVX2 dispatch regressions
         # from the setup.py.
+        #
+        # We install with the [demos] extra (matplotlib) because
+        # examples/demo_15_mini_gpt.py imports matplotlib at module
+        # top-level and raises SystemExit if it's missing — even
+        # though our validate script never actually plots anything.
+        # Cheaper to pull matplotlib into the env than to refactor
+        # demo_15's import guard.
         run: |
           python -m pip install --upgrade pip
-          pip install -e . -v
+          pip install -e ".[demos]" -v
 
       - name: Verify install + kernel dispatch
         # Sanity-check the forced-kernel mechanism the validate script
@@ -112,6 +119,11 @@ jobs:
         # Two 200-step training runs (scalar and simd). On x86_64
         # pre-AVX2 these should produce identical val losses and
         # near-identical wallclocks. That's the pre-Phase-B baseline.
+        env:
+          # Headless matplotlib backend — the validate script doesn't
+          # plot but the imported demo_15 module touches pyplot. Agg
+          # is a no-GUI renderer that works on CI without a display.
+          MPLBACKEND: Agg
         run: |
           python examples/validate_40m_dw.py 2>&1 | tee /tmp/validate_40m.txt
 
