@@ -20,6 +20,15 @@ from pybind11.setup_helpers import Pybind11Extension, build_ext
 #                    We use -mcpu (CPU-specific) instead of -march
 #                    (arch-generic) because Apple Clang treats them
 #                    differently on arm64-darwin.
+# -march=x86-64-v3 : Linux x86_64 baseline. Targets AVX + AVX2 + FMA +
+#                    BMI1/2 + LZCNT + F16C — every x86 CPU from 2013+
+#                    (Haswell / Zen). Required for the AVX2 dW kernel
+#                    to compile (_mm256_fmadd_ps is gated on FMA
+#                    being available at build time), and lets Clang
+#                    emit AVX2 FMAs in auto-vectorizable sibling
+#                    kernels too. Pre-2013 x86 CPUs are not supported.
+#                    See docs/design/spmm_backward_avx2.md for the
+#                    measurement data motivating this change.
 # ─────────────────────────────────────────────────────────────────────
 
 IS_APPLE_SILICON = (
@@ -34,6 +43,14 @@ IS_MACOS = sys.platform == "darwin"
 # their arm_neon.h include fails and arm_neon intrinsics don't exist.
 IS_ARM64 = platform.machine() in ("arm64", "aarch64")
 
+# x86_64 covers Linux x86_64 (the platform we actively support with
+# AVX2 kernels) and technically Intel macOS + Windows x86_64, which
+# are out of scope for v0.2 wheels (see CHANGELOG v0.1.1 for the
+# Intel Mac carve-out, issue #8 for Windows). The -march flag below
+# is emitted on any x86_64 build that reaches this file, but our CI
+# / wheel matrix only exercises the Linux x86_64 path.
+IS_X86_64 = platform.machine() in ("x86_64", "AMD64")
+
 if IS_APPLE_SILICON:
     extra_compile_args = [
         "-O3",
@@ -43,9 +60,25 @@ if IS_APPLE_SILICON:
         "-fvisibility=hidden",
         "-mcpu=apple-m1",
     ]
+elif IS_X86_64:
+    # x86_64 (Linux, or a source build on Intel Mac / Windows). The
+    # -march=x86-64-v3 target is supported by Clang 12+ and GCC 11+;
+    # manylinux_2_28 (our wheel build image) ships compilers that
+    # support it natively. Minimum CPU requirement for the resulting
+    # wheel: Haswell (Intel 2013+) or Zen 1 (AMD 2017+).
+    extra_compile_args = [
+        "-O3",
+        "-std=c++17",
+        "-Wall",
+        "-Wextra",
+        "-fvisibility=hidden",
+        "-march=x86-64-v3",
+    ]
 else:
-    # Conservative defaults for non-Apple-Silicon builds.
-    # Full x86/AVX support is a post-v0.1 contribution target.
+    # Fallback for any platform we haven't explicitly accounted for
+    # (e.g. Linux aarch64 using the non-Apple-Silicon branch). This
+    # build will produce a working .so but without architecture-
+    # specific SIMD tuning.
     extra_compile_args = [
         "-O3",
         "-std=c++17",
