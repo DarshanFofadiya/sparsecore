@@ -209,7 +209,7 @@ constexpr int ITERS = 10000;    // iters per timing window
 constexpr int RUNS = 10;        // timing windows, median reported
 constexpr int WARMUP = 1000;    // warmup iters, discarded
 
-using clock_t = std::chrono::steady_clock;
+using steady_clock_t = std::chrono::steady_clock;
 using ns_t = std::chrono::nanoseconds;
 
 template <typename Fn>
@@ -227,11 +227,11 @@ double time_variant_ms(Fn fn, const float* a, const float* b, int n) {
     std::vector<double> samples;
     samples.reserve(RUNS);
     for (int r = 0; r < RUNS; ++r) {
-        auto t0 = clock_t::now();
+        auto t0 = steady_clock_t::now();
         for (int i = 0; i < ITERS; ++i) {
             sink += fn(a, b, n);
         }
-        auto t1 = clock_t::now();
+        auto t1 = steady_clock_t::now();
         double ns = std::chrono::duration_cast<ns_t>(t1 - t0).count();
         samples.push_back(ns / 1e6);  // ms for the whole window
     }
